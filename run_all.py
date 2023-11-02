@@ -9,13 +9,8 @@ import argparse
 
 SCRIPTS_DIR="/home/jetson/mitecca/scripts/"
 
-barnes = SCRIPTS_DIR + "barnes.sh"
-cholesky = SCRIPTS_DIR + "cholesky.sh"
-lucont = SCRIPTS_DIR + "lucont.sh"
-ocean = SCRIPTS_DIR + "ocean.sh"
-radix = SCRIPTS_DIR + "radix.sh"
-raytrace = SCRIPTS_DIR + "raytrace.sh"
-
+available_apps = ['splash-barnes', 'splash-cholesky', 'splash-lucont', 'splash-ocean', 'splash-radix', 'splash-raytrace'
+                  'spec-gcc', 'spec-libquantum', 'spec-omnetpp', 'spec-xalancbmk']
 
 tcc = "./tcc"
 
@@ -39,10 +34,10 @@ def killProc(proc_name):
     p.wait()
 
 def makeThreads(attack_core):
-    a = threading.Thread(target=startFunc, args=(barnes,  2))
-    b = threading.Thread(target=startFunc, args=(raytrace, 5))
-    c = threading.Thread(target=startFunc, args=(ocean, 4))
-    d = threading.Thread(target=startFunc, args=(radix, 3))
+    a = threading.Thread(target=startFunc, args=(getFullApp('splash-raytrace'), 5))
+    b = threading.Thread(target=startFunc, args=(getFullApp('splash-ocean'), 2))
+    c = threading.Thread(target=startFunc, args=(getFullApp('splash-radix'), 1))
+    d = threading.Thread(target=startFunc, args=(getFullApp('splash-barnes'), 4))
     t = threading.Thread(target=startFunc, args=(tcc, attack_core))
     t.start()
     a.start()
@@ -83,15 +78,23 @@ def startClean():
 def restoreFreqs():
     startFunc("utils/setallmax.sh", 0)
 
+
+def getFullApp(app_str):
+    if "spec" in app_str:
+        name = SCRIPTS_DIR+"spec.sh " + app_str[5:] 
+    else:
+        name = SCRIPTS_DIR+app_str[7:]+".sh" 
+    return name
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Main experiment script.')
     parser.add_argument("-f", '--dvfs', action='store_true',default=False,
                     help='Lunch programs with DVFS on the attacking core')
     args = parser.parse_args()
     startClean()
-    attack_core = 1
+    attack_core = 3
     #actually run the thing
-    for i in range (10):
+    for i in range (1):
         if (args.dvfs):
             print("DVFS is ON")
             applyDVFS(attack_core)
@@ -107,4 +110,3 @@ if __name__ == "__main__":
             killProc("dvfs.sh")
         getEnergy(elapsed)
         restoreFreqs()
-        
