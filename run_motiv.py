@@ -269,6 +269,8 @@ if __name__ == "__main__":
 
    
 
+    #Try this one, has -38%
+    #['./tcc', 'splash-lucont', 'splash-lucont', 'splash-barnes', 'spec-gcc', 'splash-ocean']
 
 
 
