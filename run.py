@@ -14,35 +14,47 @@ import argparse
 
 SCRIPTS_DIR="/home/jetson/mitecca/scripts/"
 
-available_apps = ['splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
-                  'spec-gcc', 'spec-milc', 'spec-omnetpp', 'spec-xalancbmk', 'spec-bzip2', 'spec-sphinx3', 'spec-astar']
-
+#available_apps = ['splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
+available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
+                  'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk']
+#'spec-omnetpp'
+#'spec-povray', 'spec-gromacs', 'spec-cactusADM',
 tcc = "./tcc"
 
 
 finished = False
 
-mon = Monitor(1)
 
 def runProc(app_str):
     command = app_str.split(" ")
-    ##print(command)
     p = subprocess.Popen(command,  stdout=subprocess.PIPE)
     p.wait()
     
-def startWorkFunc(app_str, core):
+def startWorkFunc(app_name, core):
+    app_str = getFullApp(app_name)
     str_cmd = "taskset -c " + str(core) + " " + app_str + " " + str(core)
     command = str_cmd.split(" ")
     #print(str_cmd)
     if "tcc" in  app_str:
-         print(str_cmd)
+         #print(str_cmd)
          p = subprocess.Popen(command,  stdout=subprocess.PIPE)
     else:
-        global finished
-        while (finished == False):
-            print(str_cmd)
-            p = subprocess.Popen(command,  stdout=subprocess.PIPE)
-            p.wait()
+        #print(str_cmd)
+        p = subprocess.Popen(command,  stdout=subprocess.PIPE)
+        p.wait()
+        global mapping
+        core = -1
+        app_short = app_name[5:]
+        for idx in range(len(mapping)):
+            if app_short in mapping[idx]:
+                core = idx
+        
+        mapping[core] = mapping[core]+"*"
+        print("[Core " + str(core) +"]: " + app_name + " finished execution!" )
+        
+
+
+
         
 
 def killProc(proc_name):
@@ -54,12 +66,12 @@ def killProc(proc_name):
 
 def makeThreads(mapping):
     #creating threads
-    a = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[0]), 0))
-    b = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[1]), 1))
-    c = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[2]), 2))
-    d = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[3]), 3))
-    e = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[4]), 4))
-    f = threading.Thread(target=startWorkFunc, args=(getFullApp(mapping[5]), 5))
+    a = threading.Thread(target=startWorkFunc, args=(mapping[0], 0))
+    b = threading.Thread(target=startWorkFunc, args=(mapping[1], 1))
+    c = threading.Thread(target=startWorkFunc, args=(mapping[2], 2))
+    d = threading.Thread(target=startWorkFunc, args=(mapping[3], 3))
+    e = threading.Thread(target=startWorkFunc, args=(mapping[4], 4))
+    f = threading.Thread(target=startWorkFunc, args=(mapping[5], 5))
     print("Launching workload")
 
     a.start()
@@ -72,9 +84,6 @@ def makeThreads(mapping):
     return a,b,c,d,e,f
 
 
-def applyDVFS(core):
-    f = threading.Thread(target=runProc, args=("./dvfs.sh "))
-    f.start()
 
 
 def startClean():
@@ -141,7 +150,11 @@ def generateVariants(mapping, N):
             unique.append(tmp_map)
             found_maps+=1
     return unique
-   
+
+def generateVariant(mapping):
+    tmp_map = list(mapping)
+    random.shuffle(tmp_map)
+    return tmp_map
 
 def getProcessNamesFromMap(mapping):
     procs = []
@@ -151,74 +164,6 @@ def getProcessNamesFromMap(mapping):
 
 
 
-def run_experiment(name, withDVFS, mapping, iters, delay):
-    global log_file
-    #*******************************************************************
-    of = open(RESULTS_FOLDER + "/" + name + ".out", 'a')
-    # for x in range(6):
-    #     pref = "C" + str(x)+ "_"
-    #     of.write(pref + "instr \t" + pref + "acces \t" + pref + "misses \t")
-    # of.write("Efficiency(I/J)\n")
-    #*********************************************************************  
-
-    print("Current mapping: " + str(mapping))
-    log_file.write("Executing Current mapping: \n" + str(mapping) + "\n")
-    log_file.write("Window length = 1s. Random Delay = " + str(delay) + "\n")
-    attack_core = -1
-    for i in range (iters):
-        #Check wheter we need to apply dvfs
-        if (withDVFS):
-            for c in range(len(mapping)):
-                if "tcc" in mapping[c]:
-                    attack_core = c
-                    print("Core " + str(c) + ": DVFS is ON ")
-                    log_file.write("Core " + str(c) + ": DVFS is ON \n")
-            if (attack_core < 0):
-                print("Something horrible happened")
-                return 0
-            applyDVFS(attack_core)
-        else:
-            log_file.write("DVFS = OFF \n")
-       
-        #start the workload
-        ta,tb,tc,td,te,tf = makeThreads(mapping)
-        #wait for a window and record
-        time.sleep(delay)
-        
-        #logging metrics
-        print("Measurement triggered")
-        instr = 0
-        refs = 0
-        misses = 0
-        for c in range(6):
-            of.write(str(mon.getInstructions(c))+"\t")
-            of.write(str(mon.getCacheAccesses(c))+"\t")
-            of.write(str(mon.getCacheMisses(c))+"\t")
-            #instr.append(mon.getInstructions(c))
-            #refs.append(mon.getCacheAccesses(c))
-            #misses.append(mon.getCacheMisses(c))
-        #eff = mon.getEfficiency()
-        of.write(str(mon.getEfficiency())+"\n")
-        #wait for the threads to finish
-        global finished
-        finished = True
-        ta.join()
-        tb.join()
-        tc.join()
-        td.join()
-        te.join()
-        tf.join()
-        #kill the eternal attacker
-        killProc("tcc")
-        if (withDVFS):
-            killProc("dvfs.sh")
-            time.sleep(2)
-            restoreFreqs()
-        #leave everything ready for next iteration
-        finished = False
-    of.close()
-    #mon.stop()
-    print("Experiment finished successfully")
 
 
 def getPIDs(mapping):
@@ -244,31 +189,59 @@ def getPIDs(mapping):
     return pids
 
 def setAffinity(pid, core):
-    runProc("taskset -cp " + str(core) + " " + str(pid))
+    cmd_str = "taskset -cp " + str(core) + " " + str(pid)
+    command = cmd_str.split(" ")    
+    p = subprocess.Popen(command,  stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    if p.stderr.readlines():
+        return False
+    else:
+        p.wait()
+        return True
+    
 
 
-def executeMigration(mapping, newmap, pids):
+def executeMigration(newmap, pids):
+    global mapping
+    print("[Migration:] Moving apps to follow new mapping:")
+    print(newmap)
     tmp_pids = list(pids)
     for idx in range(len(mapping)):
         pid = pids[idx]
-        new_idx = newmap.index(mapping[idx])
-        if new_idx != idx:
-            setAffinity(pid, new_idx)
-            pass
-            tmp_pids[new_idx] = pids[idx]
+        try:
+            new_idx = newmap.index(mapping[idx])
+            if new_idx != idx:
+                tmp_pids[new_idx] = pids[idx]
+        except:
+            #remove the * of app name for comparison
+            new_idx = newmap.index(mapping[idx][:-1])
+            newmap[new_idx] = newmap[new_idx] +"*"
+            tmp_pids[new_idx] = -1        
+    mapping = newmap
     return tmp_pids  
 
-def run_simple(mapping, migration):
-    print("Current mapping: " + str(mapping))
-    print("Migration mapping: " + str(migration))
-    ta,tb,tc,td,te,tf = makeThreads(mapping)
-    
-    pids = getPIDs(mapping)
-    print(pids)
-    pids = executeMigration(mapping, migration, pids)
-    print(pids)
-    
 
+def saveTraces(of, original_map, before_mig):
+    for x in range(len(mapping)):
+        if ("*" not in mapping[x]):
+            id = original_map.index(mapping[x])
+        else:
+            id = -1
+        of.write(str(id)+"\t") 
+    if before_mig:
+        for c in range(6):
+            of.write(str(mon.getInstructions(c))+"\t")
+            of.write(str(mon.getCacheAccesses(c))+"\t")
+            of.write(str(mon.getCacheMisses(c))+"\t")
+        of.write(str(mon.getEfficiency())+"\t")
+    else:
+        of.write(str(mon.getEfficiency())+"\n")
+
+
+
+def run_simple(mapping):
+    start = timer()
+    print("Current mapping: " + str(mapping))
+    ta,tb,tc,td,te,tf = makeThreads(mapping)
     global finished
     finished = True
     ta.join()
@@ -277,91 +250,148 @@ def run_simple(mapping, migration):
     td.join()
     te.join()
     tf.join()
+    end = timer()
+    elapsed = end - start
     killProc("tcc")
-    print("Experiment finished successfully")
+    print("Experiment finished successfully") 
+    print("Total execution time = ", str(round(elapsed,2)) + "s")   
 
 
+def run_experiment(base_map, delay):
+    global log_file
+    global mapping
+    mapping = list(base_map)
+    
+    of = open(RESULTS_FOLDER + "/stats.out", 'a')
 
-if __name__ == "__main__":
-    startClean()
-    # mon.start()
+    print("Current mapping: " + str(mapping))
+    log_file.write("Executing Current mapping: \n" + str(mapping) + "\n")
+    log_file.write("Window length = 1s. Random Delay = " + str(delay) + "\n")
+    attack_core = -1
+    start = timer()
+    ta,tb,tc,td,te,tf = makeThreads(mapping)
+    pids = getPIDs(mapping)
+    print(pids)
+    
+    #new random mapping
+    migration = generateVariant(mapping)
+    #wait randoy delay before trigger measurement
+    time.sleep(delay)
+    #record pre migration traces
+    mon.record()
+    #wait a little for the the trace to be recorded
+    while not mon.isdone():
+        time.sleep(0.01)
+
+    saveTraces(of, base_map, before_mig=True)
+    
+    #apply dvfs
+    for c in range(len(migration)):
+        if "tcc" in migration[c]:
+            attack_core = c
+    #print("attack core is "+ str(attack_core))
+    applyDVFS(str(attack_core))
+    #then migrate
+    pids = executeMigration(migration, pids)
+    #and start recording again
+    mon.record()
+    print(pids)
+    while not mon.isdone():
+        time.sleep(0.01)
+
+    saveTraces(of, base_map, before_mig=False)
+
+    #umm let's do it again at least of couple of times
+    #but do not apply dvfs, since we are doing so already
+  
+    for times in range(5):
+        #first generate random variant
+        migration = generateVariant(mapping)
+        #trigger recording
+        mon.record()
+        #wait a little for the the trace to be recorded
+        while not mon.isdone():
+            time.sleep(0.01)
+        #save it 
+        saveTraces(of, base_map, before_mig=True)
+        #then migrate
+        pids = executeMigration(migration, pids)
+        #and start recording again
+        mon.record()
+        print(pids)
+        while not mon.isdone():
+            time.sleep(0.01)
+        #save it 
+        saveTraces(of, base_map, before_mig=False)
+    
+    #not needed anymore
+    #global finished
+    #finished = True
+    ta.join()
+    tb.join()
+    tc.join()
+    td.join()
+    te.join()
+    tf.join()
+    end = timer()
+    elapsed = end - start
+    killProc("tcc")
+    print("Experiment finished successfully") 
+    print("Total execution time = ", str(round(elapsed,2)) + "s")   
+    killProc("dvfs.sh")
+    time.sleep(1)
+    restoreFreqs()
+
+def run_training():
+    global current_datetime
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # #directory creation TODO: move to a function that returns the file
     # #*******************************************************************
+    global RESULTS_FOLDER
     RESULTS_FOLDER = "results/" + "training_" + str(current_datetime)
-    # str_cmd = "mkdir " + RESULTS_FOLDER
-    # command = str_cmd.split(" ")
-    # p = subprocess.Popen(command)
-    # p.wait()
-    # #***********************************************************
-    # #test 
-    # global log_file
-    # log_file = open(RESULTS_FOLDER +"/experiment.log", "w")
+    str_cmd = "mkdir " + RESULTS_FOLDER
+    command = str_cmd.split(" ")
+    p = subprocess.Popen(command)
+    p.wait()
+    #***********************************************************
+
     
-    iters = 1
+    global log_file
+    log_file = open(RESULTS_FOLDER +"/experiment.log", "w")
+    
     num_bases = 20
-    map_variants = 8
-    runs_per_map = 10
+    runs_per_map = 5 
 
-
-    testmap = generateApps()
-    migration = generateVariants(testmap, 1)
-    print(testmap)
-    print(migration[1])
-
-
-    # print(testmap)
-    # print(getProcessNamesFromMap(testmap))
-    # print(migration[1])
-    run_simple(testmap, migration[1])
-
-    
+    for x in range(num_bases):
+        #base_mapping = ['./tcc', 'spec-gobmk', 'spec-lbm', 'spec-sphinx3', 'spec-namd', 'spec-milc']
+        base_mapping = generateApps()        
+        for id in range (runs_per_map):           
+            r_delay = 1.5*random.random()
+            #Run baseline map with and without DVFS 
+            run_experiment(base_mapping, r_delay)
+            #with DVFS on base here
 
 
 
-    # for x in range(num_bases):
-    #     base_mapping = generateApps()
-        
-    #     #generating variant mappings
-    #     maps = generateVariants(base_mapping, map_variants)
-    #     for m in maps:
-    #         log_file.write(str(m)+ "\n")
-        
-        
-    #     #directory creation TODO: move to a function 
-    #     #*******************************************************************
-    #     if not os.path.isdir(RESULTS_FOLDER + "/base_" + f"{x:02}"):
-    #         # directory does not exist
-    #         str_cmd = "mkdir " + RESULTS_FOLDER + "/base_" + f"{x:02}"
-    #         command = str_cmd.split(" ")
-    #         p = subprocess.Popen(command)
-    #         p.wait()
-    #     #*******************************************************************
+def applyDVFS(core):
+    print("Applying DVFS to core: " + str(core))
+    f = threading.Thread(target=startDVFS, args=(core))
+    f.start()
 
-    #     SUBFOLDER = "/base_" + f"{x:02}"
-        
-    #     for id in range (runs_per_map):
-    #         #directory creation TODO: move to a function 
-    #         #*******************************************************************
-    #         if not os.path.isdir(RESULTS_FOLDER +  SUBFOLDER + "/run_" + f"{id:02}"):
-    #             # directory does not exist
-    #             str_cmd = "mkdir " + RESULTS_FOLDER + SUBFOLDER + "/run_" + f"{id:02}"
-    #             command = str_cmd.split(" ")
-    #             p = subprocess.Popen(command)
-    #             p.wait()
-    #         #*******************************************************************
-           
-    #         r_delay = 10 * random.random()
-            
-    #         #Run baseline map with and without DVFS 
-    #         run_experiment(SUBFOLDER + "/run_" + f"{id:02}" + "/baseline", False, base_mapping, iters, r_delay)
-    #         run_experiment(SUBFOLDER + "/run_" + f"{id:02}" + "/baseline_DVFS", True, base_mapping, iters, r_delay)
-    #         #then run all the variants with DVFS=ON
-    #         log_file.write("Executing variants of mapping \n")
-    #         for r in range(1,len(maps)):
-    #             run_experiment(SUBFOLDER + "/run_" + f"{id:02}" + "/variants", True, maps[r], iters, r_delay)
-            
-    #mon.stop()
 
+def startDVFS(core):
+    str_cmd ="./dvfs.sh " + str(core)
+    #print(str_cmd)
+    command = str_cmd.split(" ")
+    p = subprocess.Popen(command,  stdout=subprocess.PIPE)
+    p.wait()
+
+if __name__ == "__main__":
+    mon = Monitor("trigger", 1)
+    startClean()
+    mon.start()
+    run_training() 
+    mon.stop()
+    #try this one  ['spec-namd', 'spec-omnetpp', './tcc', 'spec-bwaves', 'spec-bzip2', 'spec-mcf']
 
 
