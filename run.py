@@ -1,4 +1,6 @@
 from monitor import *
+from retthreading import *
+
 
 import threading
 import sys
@@ -87,7 +89,7 @@ def makeThreads(mapping):
 
 
 def startClean():
-    str_cmd = "sudo rm -rf *.ipc *.out"
+    str_cmd = "sudo rm -rf *.ipc *.out *.tmp"
     command = str_cmd.split(" ")
     p = subprocess.Popen(command)
     p.wait()
@@ -164,27 +166,49 @@ def getProcessNamesFromMap(mapping):
 
 
 
+def getPIDThread(proc):
+    found = False
+    str_cmd = "taskset -c 0 pidof " + proc
+    command = str_cmd.split(" ")
+    pid = -1
+    print(str_cmd)
+    while not found:
+            p = subprocess.run(command,capture_output=True)
+            ans = p.stdout
+            try:
+                a = int(ans.decode("utf-8")) + 1 - 1
+                found = True
+                pid = a
+            except:
+                time.sleep(0.005)
+    return pid
 
 
+#this is an overkill, I am not sorry.
 def getPIDs(mapping):
     procs = getProcessNamesFromMap(mapping)
-    pids = []
-    for ps in procs:
-        found = False
-        str_cmd = "pidof " + ps
-        command = str_cmd.split(" ")
-        print(str_cmd)
-        while not found:
-                p = subprocess.Popen(command,  stdout=subprocess.PIPE)
-                p.wait()
-                ans = p.stdout.readline()
-                try:
-                    a = int(ans.decode("utf-8")) + 1 - 1
-                    found = True
-                    pids.append(a)
+    print(procs)
+    pids = [-1,-1,-1,-1,-1,-1]
+    a = RetThread(target=getPIDThread, args=(procs[0],))
+    b = RetThread(target=getPIDThread, args=(procs[1],))
+    c = RetThread(target=getPIDThread, args=(procs[2],))
+    d = RetThread(target=getPIDThread, args=(procs[3],))
+    e = RetThread(target=getPIDThread, args=(procs[4],))
+    f = RetThread(target=getPIDThread, args=(procs[5],))
+    print("[Thread team]: getting pids in parallel")
+    a.start()
+    b.start()
+    c.start()
+    d.start()
+    e.start()
+    f.start()
 
-                except:
-                    time.sleep(0.005)
+    pids[0] = a.join()
+    pids[1] = b.join()
+    pids[2] = c.join()
+    pids[3] = d.join()
+    pids[4] = e.join()
+    pids[5] = f.join()
 
     return pids
 
@@ -205,22 +229,39 @@ def executeMigration(newmap, pids):
     print("[Migration:] Moving apps to follow new mapping:")
     print(newmap)
     tmp_pids = list(pids)
-    for idx in range(len(mapping)):
-        pid = pids[idx]
-        try:
-            new_idx = newmap.index(mapping[idx])
-            if new_idx != idx:
-                tmp_pids[new_idx] = pids[idx]
-        except:
-            #remove the * of app name for comparison
-            new_idx = newmap.index(mapping[idx][:-1])
-            newmap[new_idx] = newmap[new_idx] +"*"
-            tmp_pids[new_idx] = -1        
-    mapping = newmap
+    #Only apply migration if the new candidate is different than current mapping
+    if (newmap != mapping):
+        #check each app for it's new core
+        for idx in range(len(mapping)):
+            pid = pids[idx]
+            #the application might have finished, so check first if it exists still
+            try:
+                new_idx = newmap.index(mapping[idx])
+                # let's check if it needs to be moved
+                if new_idx != idx:
+                    #if so then save the new pid in the corresponding core position
+                    tmp_pids[new_idx] = pid
+                    #and move it
+                    setAffinity(pid, new_idx)
+            #if the app finished already
+            except:
+                #remove the * of app name for comparison
+                new_idx = newmap.index(mapping[idx][:-1])
+                #and add it again in the new mapping
+                newmap[new_idx] = newmap[new_idx] +"*"
+                #then set the pid to undefined (-1)
+                tmp_pids[new_idx] = -1
+        #finally make the current mapping as the new one                
+        mapping = newmap
     return tmp_pids  
 
 
-def saveTraces(of, original_map, before_mig):
+def saveTraces(of, original_map, before_mig, dvfs):
+    if (before_mig):    
+        if (dvfs):
+            of.write("1\t")
+        else:
+            of.write("0\t")
     for x in range(len(mapping)):
         if ("*" not in mapping[x]):
             id = original_map.index(mapping[x])
@@ -283,15 +324,19 @@ def run_experiment(base_map, delay):
     while not mon.isdone():
         time.sleep(0.01)
 
-    saveTraces(of, base_map, before_mig=True)
+    saveTraces(of, base_map, before_mig=True, dvfs=False)
     
     #apply dvfs
+    
     for c in range(len(migration)):
         if "tcc" in migration[c]:
             attack_core = c
-    #print("attack core is "+ str(attack_core))
     applyDVFS(str(attack_core))
+    log_file.write("[DVFS]: Applying DVFS to core " + str(attack_core) + "\n")
+
+
     #then migrate
+    log_file.write("[Migration:] Moving apps to follow new mapping:" + str(migration) + "\n")
     pids = executeMigration(migration, pids)
     #and start recording again
     mon.record()
@@ -299,7 +344,7 @@ def run_experiment(base_map, delay):
     while not mon.isdone():
         time.sleep(0.01)
 
-    saveTraces(of, base_map, before_mig=False)
+    saveTraces(of, base_map, before_mig=False, dvfs=True)
 
     #umm let's do it again at least of couple of times
     #but do not apply dvfs, since we are doing so already
@@ -313,8 +358,9 @@ def run_experiment(base_map, delay):
         while not mon.isdone():
             time.sleep(0.01)
         #save it 
-        saveTraces(of, base_map, before_mig=True)
+        saveTraces(of, base_map, before_mig=True, dvfs=True)
         #then migrate
+        log_file.write("[Migration:] Moving apps to follow new mapping:" + str(migration) + "\n")
         pids = executeMigration(migration, pids)
         #and start recording again
         mon.record()
@@ -322,11 +368,9 @@ def run_experiment(base_map, delay):
         while not mon.isdone():
             time.sleep(0.01)
         #save it 
-        saveTraces(of, base_map, before_mig=False)
-    
-    #not needed anymore
-    #global finished
-    #finished = True
+        saveTraces(of, base_map, before_mig=False, dvfs=True)
+
+    # barrier here, waiting for apps to finish    
     ta.join()
     tb.join()
     tc.join()
@@ -335,12 +379,15 @@ def run_experiment(base_map, delay):
     tf.join()
     end = timer()
     elapsed = end - start
-    killProc("tcc")
-    print("Experiment finished successfully") 
-    print("Total execution time = ", str(round(elapsed,2)) + "s")   
+    print("Experiment finished successfully")
+    log_file.write("Experiment finished successfully\n") 
+    print("Total execution time = ", str(round(elapsed,2)) + "s")
+    log_file.write("Total execution time = " + str(round(elapsed,2)) + "s\n") 
+    killProc("tcc")   
     killProc("dvfs.sh")
     time.sleep(1)
     restoreFreqs()
+    
 
 def run_training():
     global current_datetime
@@ -359,18 +406,18 @@ def run_training():
     global log_file
     log_file = open(RESULTS_FOLDER +"/experiment.log", "w")
     
-    num_bases = 20
-    runs_per_map = 5 
+    num_bases = 10
+    runs_per_map = 5
 
     for x in range(num_bases):
-        #base_mapping = ['./tcc', 'spec-gobmk', 'spec-lbm', 'spec-sphinx3', 'spec-namd', 'spec-milc']
+        #base_mapping = ['./tcc', 'spec-lbm', 'spec-astar', 'spec-bzip2', 'spec-gcc', 'spec-bwaves']
         base_mapping = generateApps()        
         for id in range (runs_per_map):           
-            r_delay = 1.5*random.random()
+            r_delay = 5*random.random()
             #Run baseline map with and without DVFS 
             run_experiment(base_mapping, r_delay)
             #with DVFS on base here
-
+    log_file.close()
 
 
 def applyDVFS(core):
@@ -392,6 +439,5 @@ if __name__ == "__main__":
     mon.start()
     run_training() 
     mon.stop()
-    #try this one  ['spec-namd', 'spec-omnetpp', './tcc', 'spec-bwaves', 'spec-bzip2', 'spec-mcf']
 
 
