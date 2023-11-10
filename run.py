@@ -1,6 +1,6 @@
+from config import *
 from monitor import *
 from retthreading import *
-
 
 import threading
 import sys
@@ -14,7 +14,6 @@ from random import randrange
 
 import argparse
 
-SCRIPTS_DIR="/home/jetson/mitecca/scripts/"
 
 #available_apps = ['splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
 available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
@@ -221,7 +220,18 @@ def setAffinity(pid, core):
     else:
         p.wait()
         return True
-    
+   
+def applyDVFS(core):
+    f = threading.Thread(target=startDVFS, args=(core))
+    f.start()
+
+
+def startDVFS(core):
+    str_cmd ="./dvfs.sh " + str(core)
+    #print(str_cmd)
+    command = str_cmd.split(" ")
+    p = subprocess.Popen(command,  stdout=subprocess.PIPE)
+    p.wait()
 
 
 def executeMigration(newmap, pids):
@@ -279,18 +289,22 @@ def saveTraces(of, original_map, before_mig, dvfs):
 
 
 
-def run_simple(mapping):
+def run_simple(base_map, workdir=None):
+    global mapping
+    mapping = base_map
+    if (workdir!=None):
+        mon.setworkdir(workdir)
+    mon.start()
+    print("Current mapping: " + str(base_map))
+    ta,tb,tc,td,te,tf = makeThreads(base_map)
     start = timer()
-    print("Current mapping: " + str(mapping))
-    ta,tb,tc,td,te,tf = makeThreads(mapping)
-    global finished
-    finished = True
     ta.join()
     tb.join()
     tc.join()
     td.join()
     te.join()
     tf.join()
+    mon.stop()
     end = timer()
     elapsed = end - start
     killProc("tcc")
@@ -298,12 +312,100 @@ def run_simple(mapping):
     print("Total execution time = ", str(round(elapsed,2)) + "s")   
 
 
+
+def run_simple_dvfs_after_delay(base_map, delay, workdir=None):
+    global mapping
+    mapping = base_map
+    if (workdir!=None):
+        mon.setworkdir(workdir)
+    start = timer()
+    mon.start()
+    print("Current mapping: " + str(base_map))
+    ta,tb,tc,td,te,tf = makeThreads(base_map)
+    # wait for delay before applying dvfs
+    print("Waiting before applying DVFS")
+    time.sleep(delay)
+    # now let's apply dvfs where the attacker is 
+
+    #apply dvfs
+    attack_core = -1
+    for c in range(len(mapping)):
+        if "tcc" in mapping[c]:
+            attack_core = c
+    print("Applying DVFS to core: " + str(attack_core))
+    applyDVFS(str(attack_core))
+    print("Waiting for workload to finish")
+    #and now let's wait for the workload to finish
+    ta.join()
+    tb.join()
+    tc.join()
+    td.join()
+    te.join()
+    tf.join()
+
+    mon.stop()
+    end = timer()
+    elapsed = end - start
+    print("Experiment finished successfully")
+    print("Total execution time = ", str(round(elapsed,2)) + "s")
+    killProc("tcc")   
+    killProc("dvfs.sh")
+    time.sleep(1)
+    restoreFreqs() 
+    
+def run_simple_migrate_dvfs(base_map, delay, migration, workdir=None):
+    global mapping
+    mapping = base_map
+    if (workdir!=None):
+        mon.setworkdir(workdir)
+    start = timer()
+    mon.start()
+    print("Current mapping: " + str(base_map))
+    ta,tb,tc,td,te,tf = makeThreads(base_map)
+    pids = getPIDs(mapping)
+    print(pids)
+    # wait for delay before applying dvfs
+    print("Waiting before applying DVFS")
+    time.sleep(delay)
+    #now let's apply dvfs where the attacker is 
+    #apply dvfs
+    attack_core = -1
+    for c in range(len(migration)):
+        if "tcc" in migration[c]:
+            attack_core = c
+    print("Applying DVFS to core: " + str(attack_core))
+    applyDVFS(str(attack_core))
+
+    #then migrate
+    pids = executeMigration(migration, pids)
+    print("Waiting for workload to finish")
+    #and now let's wait for the workload to finish
+    ta.join()
+    tb.join()
+    tc.join()
+    td.join()
+    te.join()
+    tf.join()
+
+    mon.stop()
+    end = timer()
+    elapsed = end - start
+    print("Experiment finished successfully")
+    print("Total execution time = ", str(round(elapsed,2)) + "s")
+    killProc("tcc")   
+    killProc("dvfs.sh")
+    time.sleep(1)
+    restoreFreqs() 
+    
+
+
+
 def run_experiment(base_map, delay):
     global log_file
     global mapping
+
     mapping = list(base_map)
-    
-    of = open(RESULTS_FOLDER + "/stats.out", 'a')
+    of = open(WORK_FOLDER + "/stats.out", 'a')
 
     print("Current mapping: " + str(mapping))
     log_file.write("Executing Current mapping: \n" + str(mapping) + "\n")
@@ -327,7 +429,6 @@ def run_experiment(base_map, delay):
     saveTraces(of, base_map, before_mig=True, dvfs=False)
     
     #apply dvfs
-    
     for c in range(len(migration)):
         if "tcc" in migration[c]:
             attack_core = c
@@ -390,13 +491,12 @@ def run_experiment(base_map, delay):
     
 
 def run_training():
-    global current_datetime
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # #directory creation TODO: move to a function that returns the file
     # #*******************************************************************
-    global RESULTS_FOLDER
-    RESULTS_FOLDER = "results/" + "training_" + str(current_datetime)
-    str_cmd = "mkdir " + RESULTS_FOLDER
+    global WORK_FOLDER
+    WORK_FOLDER = RESULTS_FOLDER + "training_" + str(current_datetime)
+    str_cmd = "mkdir " + WORK_FOLDER
     command = str_cmd.split(" ")
     p = subprocess.Popen(command)
     p.wait()
@@ -404,11 +504,14 @@ def run_training():
 
     
     global log_file
-    log_file = open(RESULTS_FOLDER +"/experiment.log", "w")
+    log_file = open(WORK_FOLDER +"/experiment.log", "w")
     
-    num_bases = 10
-    runs_per_map = 5
-
+    num_bases = 1
+    runs_per_map = 2
+    
+    global mon
+    mon = Monitor("trigger", 1)
+    mon.start()
     for x in range(num_bases):
         #base_mapping = ['./tcc', 'spec-lbm', 'spec-astar', 'spec-bzip2', 'spec-gcc', 'spec-bwaves']
         base_mapping = generateApps()        
@@ -417,27 +520,74 @@ def run_training():
             #Run baseline map with and without DVFS 
             run_experiment(base_mapping, r_delay)
             #with DVFS on base here
+    mon.stop()
     log_file.close()
 
 
-def applyDVFS(core):
-    print("Applying DVFS to core: " + str(core))
-    f = threading.Thread(target=startDVFS, args=(core))
-    f.start()
 
 
-def startDVFS(core):
-    str_cmd ="./dvfs.sh " + str(core)
-    #print(str_cmd)
-    command = str_cmd.split(" ")
-    p = subprocess.Popen(command,  stdout=subprocess.PIPE)
-    p.wait()
+def run_sota():
+    global mon
+    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    WORK_FOLDER = RESULTS_FOLDER + "sota_" + str(current_datetime)+"/"
+    
+    if not os.path.isdir(WORK_FOLDER):
+        os.mkdir(WORK_FOLDER)
+    
+    sota_delay = 2
+    number_runs = 1
+    for n in range(number_runs):
+        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+        os.mkdir(RUN_DIR)
+        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
+        #base_mapping = generateApps()
+        run_simple_dvfs_after_delay(base_mapping, delay = sota_delay, workdir = RUN_DIR)
 
+def run_baseline():
+    global mon
+    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    WORK_FOLDER = RESULTS_FOLDER + "baseline_" + str(current_datetime)+"/"
+    
+    if not os.path.isdir(WORK_FOLDER):
+        os.mkdir(WORK_FOLDER)
+    
+    number_runs = 1
+    for n in range(number_runs):
+        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+        os.mkdir(RUN_DIR)
+        #base_mapping = generateApps()
+        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
+        run_simple(base_mapping, workdir = RUN_DIR)
+
+
+def run_motiv():
+    global mon
+    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    WORK_FOLDER = RESULTS_FOLDER + "motiv" + str(current_datetime)+"/"
+    
+    if not os.path.isdir(WORK_FOLDER):
+        os.mkdir(WORK_FOLDER)
+    
+    number_runs = 1
+    for n in range(number_runs):
+        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+        os.mkdir(RUN_DIR)
+        delay = 2
+        #base_mapping = generateApps()
+        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
+        migration = ['./tcc', 'spec-bzip2', 'spec-mcf', 'spec-milc', 'spec-bwaves', 'spec-astar']
+        run_simple_migrate_dvfs(base_mapping, delay= delay, workdir = RUN_DIR, migration = migration)
+
+
+
+    
 if __name__ == "__main__":
-    mon = Monitor("trigger", 1)
     startClean()
-    mon.start()
-    run_training() 
-    mon.stop()
-
+    #run_sota()
+    run_baseline()
+    #run_training() 
+    #run_motiv()
 
