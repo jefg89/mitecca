@@ -1,6 +1,7 @@
 from config import *
 from monitor import *
 from retthreading import *
+from policies import *
 
 import threading
 import sys
@@ -227,7 +228,7 @@ def applyDVFS(core):
 
 
 def startDVFS(core):
-    str_cmd ="./dvfs.sh " + str(core)
+    str_cmd ="./utils/dvfs.sh " + str(core)
     #print(str_cmd)
     command = str_cmd.split(" ")
     p = subprocess.Popen(command,  stdout=subprocess.PIPE)
@@ -291,7 +292,7 @@ def saveTraces(of, original_map, before_mig, dvfs):
 
 def run_simple(base_map, workdir=None):
     global mapping
-    mapping = base_map
+    mapping = list(base_map)
     if (workdir!=None):
         mon.setworkdir(workdir)
     mon.start()
@@ -315,7 +316,7 @@ def run_simple(base_map, workdir=None):
 
 def run_simple_dvfs_after_delay(base_map, delay, workdir=None):
     global mapping
-    mapping = base_map
+    mapping = list(base_map)
     if (workdir!=None):
         mon.setworkdir(workdir)
     start = timer()
@@ -355,7 +356,7 @@ def run_simple_dvfs_after_delay(base_map, delay, workdir=None):
     
 def run_simple_migrate_dvfs(base_map, delay, migration, workdir=None):
     global mapping
-    mapping = base_map
+    mapping = list(base_map)
     if (workdir!=None):
         mon.setworkdir(workdir)
     start = timer()
@@ -397,6 +398,59 @@ def run_simple_migrate_dvfs(base_map, delay, migration, workdir=None):
     time.sleep(1)
     restoreFreqs() 
     
+    
+def run_with_policy(base_map, delay, Policy, workdir=None):
+    global mapping
+    mapping = list(base_map)
+    if (workdir!=None):
+        mon.setworkdir(workdir)
+    start = timer()
+    mon.start()
+    print("Current mapping: " + str(base_map))
+    ta,tb,tc,td,te,tf = makeThreads(base_map)
+    pids = getPIDs(mapping)
+    print(pids)
+    # wait for delay before applying dvfs
+    print("Waiting before applying DVFS")
+    time.sleep(delay)
+
+    #***************************************
+    # Apply the policy here
+    migration = Policy.executePolicy(mapping)
+    #
+    # **************************************
+
+
+    #now let's apply dvfs where the attacker is 
+    #apply dvfs
+    attack_core = -1
+    for c in range(len(migration)):
+        if "tcc" in migration[c]:
+            attack_core = c
+    print("Applying DVFS to core: " + str(attack_core))
+    applyDVFS(strattack_core))
+
+    #then migrate
+    pids = executeMigration(migration, pids)
+    print("Waiting for workload to finish")
+    #and now let's wait for the workload to finish
+    ta.join()
+    tb.join()
+    tc.join()
+    td.join()
+    te.join()
+    tf.join()
+
+    mon.stop()
+    end = timer()
+    elapsed = end - start
+    print("Experiment finished successfully")
+    print("Total execution time = ", str(round(elapsed,2)) + "s")
+    killProc("tcc")   
+    killProc("dvfs.sh")
+    time.sleep(1)
+    restoreFreqs() 
+
 
 
 
@@ -450,7 +504,7 @@ def run_experiment(base_map, delay):
     #umm let's do it again at least of couple of times
     #but do not apply dvfs, since we are doing so already
   
-    for times in range(5):
+    for times in range(7):
         #first generate random variant
         migration = generateVariant(mapping)
         #trigger recording
@@ -506,8 +560,8 @@ def run_training():
     global log_file
     log_file = open(WORK_FOLDER +"/experiment.log", "w")
     
-    num_bases = 1
-    runs_per_map = 2
+    num_bases = 50
+    runs_per_map = 5
     
     global mon
     mon = Monitor("trigger", 1)
@@ -526,7 +580,7 @@ def run_training():
 
 
 
-def run_sota():
+def eval_run_sota(premaps=None):
     global mon
     mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -535,16 +589,24 @@ def run_sota():
     if not os.path.isdir(WORK_FOLDER):
         os.mkdir(WORK_FOLDER)
     
-    sota_delay = 2
-    number_runs = 1
-    for n in range(number_runs):
-        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
-        os.mkdir(RUN_DIR)
-        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
-        #base_mapping = generateApps()
-        run_simple_dvfs_after_delay(base_mapping, delay = sota_delay, workdir = RUN_DIR)
+    if premaps==None:
+        sota_delay = 2
+        number_runs = 1
+        for n in range(number_runs):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+            os.mkdir(RUN_DIR)
+            base_mapping = generateApps()
+            run_simple_dvfs_after_delay(base_mapping, delay = sota_delay, workdir = RUN_DIR)
+    else:
+        sota_delay = 2
+        for m in range(len(premaps)):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
+            os.mkdir(RUN_DIR)
+            run_simple_dvfs_after_delay(premaps[m], delay = sota_delay, workdir = RUN_DIR)
 
-def run_baseline():
+
+
+def eval_run_baseline(premaps=None):
     global mon
     mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -552,42 +614,69 @@ def run_baseline():
     
     if not os.path.isdir(WORK_FOLDER):
         os.mkdir(WORK_FOLDER)
-    
-    number_runs = 1
-    for n in range(number_runs):
-        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
-        os.mkdir(RUN_DIR)
-        #base_mapping = generateApps()
-        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
-        run_simple(base_mapping, workdir = RUN_DIR)
+    if premaps == None:
+        number_runs = 1
+        for n in range(number_runs):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+            os.mkdir(RUN_DIR)
+            base_mapping = generateApps()
+            run_simple(base_mapping, workdir = RUN_DIR)
+    else:
+        for m in range(len(premaps)):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
+            os.mkdir(RUN_DIR)
+            run_simple(premaps[m], workdir = RUN_DIR)
 
 
-def run_motiv():
+def eval_run_policy(policy, premaps= None):
     global mon
     mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    WORK_FOLDER = RESULTS_FOLDER + "motiv" + str(current_datetime)+"/"
+    WORK_FOLDER = RESULTS_FOLDER + "policy_" + policy.name +"_" + str(current_datetime)+"/"
     
     if not os.path.isdir(WORK_FOLDER):
         os.mkdir(WORK_FOLDER)
-    
-    number_runs = 1
-    for n in range(number_runs):
-        RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
-        os.mkdir(RUN_DIR)
-        delay = 2
-        #base_mapping = generateApps()
-        base_mapping = ['spec-mcf', 'spec-bzip2', 'spec-milc', 'spec-bwaves', './tcc', 'spec-astar']
-        migration = ['./tcc', 'spec-bzip2', 'spec-mcf', 'spec-milc', 'spec-bwaves', 'spec-astar']
-        run_simple_migrate_dvfs(base_mapping, delay= delay, workdir = RUN_DIR, migration = migration)
+    if premaps == None:
+        sota_delay = 2
+        number_runs = 1
+        for n in range(number_runs):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{n:03}" + "/"
+            os.mkdir(RUN_DIR)
+            base_mapping = generateApps()
+            run_with_policy(base_mapping,  delay = sota_delay, Policy=policy, workdir = RUN_DIR)
+    else:
+        sota_delay = 2
+        for m in range(len(premaps)):
+            RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
+            os.mkdir(RUN_DIR)
+            run_with_policy(premaps[m],  delay = sota_delay, Policy=policy, workdir = RUN_DIR)
 
 
 
     
 if __name__ == "__main__":
     startClean()
-    #run_sota()
-    run_baseline()
+    #eval_eval_run_sota()
+    #eval_run_baseline()
     #run_training() 
     #run_motiv()
+
+    premaps = []
+    mappfile=open("maps.txt", "w")
+    for x in range(10):
+        premaps.append(generateApps())
+    mappfile.write(str(premaps))
+    mappfile.close()
+
+
+    eval_run_baseline(premaps)
+    print("Finished baselines *************")
+    print(premaps)
+    eval_run_sota(premaps)
+    print("Finished sota *****************")
+    pol = FixedCoreDenver()
+    eval_run_policy(policy=pol, premaps=premaps)
+    
+
+
 
