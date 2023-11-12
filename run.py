@@ -428,7 +428,7 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
         if "tcc" in migration[c]:
             attack_core = c
     print("Applying DVFS to core: " + str(attack_core))
-    applyDVFS(strattack_core))
+    applyDVFS(str(attack_core))
 
     #then migrate
     pids = executeMigration(migration, pids)
@@ -632,7 +632,8 @@ def eval_run_policy(policy, premaps= None):
     global mon
     mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    WORK_FOLDER = RESULTS_FOLDER + "policy_" + policy.name +"_" + str(current_datetime)+"/"
+    WORK_FOLDER = RESULTS_FOLDER + policy.name.lower() +"_" + str(current_datetime)+"/"
+    
     
     if not os.path.isdir(WORK_FOLDER):
         os.mkdir(WORK_FOLDER)
@@ -663,7 +664,7 @@ if __name__ == "__main__":
 
     premaps = []
     mappfile=open("maps.txt", "w")
-    for x in range(10):
+    for x in range(1):
         premaps.append(generateApps())
     mappfile.write(str(premaps))
     mappfile.close()
