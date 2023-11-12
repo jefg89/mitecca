@@ -1,7 +1,7 @@
 #!/bin/bash
 SPECPBASE=/home/jetson/mitecca/spec/cpu2006
 SPECPBIN=$SPECPBASE/bin
-CONFIGARM=$SPECPBASE/config/linux64-arm64-gcc.cfg
+CONFIGARM=linux64-arm64-gcc.cfg
 
 SCRIPTPTH=`pwd`
 

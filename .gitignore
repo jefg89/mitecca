@@ -1,2 +1,6 @@
 *.out
 *.o
+__pycache__
+tcc
+results/*
+.vscode/

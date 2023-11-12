@@ -7,8 +7,8 @@
 using namespace std;
 using namespace std::chrono;
 
-#define BPS 5
-#define FREQ_CHANNEL_HZ  20 
+#define BPS 2
+#define FREQ_CHANNEL_HZ  10 
 #define PACKET_BITS 64
 
 
@@ -42,7 +42,9 @@ void preciseMilliSleep(double milli_seconds) {
 void encodeOne(double milli_seconds) {
     bool exit = false;
     auto start = high_resolution_clock::now();
+    double x = sqrt(18800000);
     while (!exit) {
+        x+=sqrt(x)*sqrt(x/15546);
         auto end = high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end-start;
         exit = elapsed.count() >= milli_seconds;
@@ -76,12 +78,13 @@ int main(int argc, char const *argv[])
     float bit_period_ms = 1000 / FREQ_CHANNEL_HZ;
     float num_periods = (1000/BPS) / bit_period_ms;  
     
-    while (1) {
+    
         uint8_t num_packets = atoi(argv[1]);
+        while (1) {
         for (size_t i = 0; i < num_packets; i++){
             uint64_t data = distrib(gen);
-            uint64_t header = 0xC000000000000000;
-            data = data | header;
+            uint64_t header = 0xCFFFFFFFFFFFFFFF;
+            //data = data | header;
             std::cout << "Packet = " << std::hex << data <<endl;
             for (size_t i = 0; i < PACKET_BITS; i++){
                 uint8_t bit = (data >> (PACKET_BITS -1)) & 0x01; 
