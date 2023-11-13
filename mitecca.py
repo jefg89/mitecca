@@ -18,10 +18,10 @@ denver_cores = [1, 2]
 indices_of_features_to_scale = list(range(0,19))
 num_apps = 6
 
-def generate_unique_mappings(current_mapping, arm_cores, denver_cores, num_apps):
+def generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps):
     unique_mappings = []
-    current_arm_apps = sorted([current_mapping[i] for i in arm_cores])
-    current_denver_apps = sorted([current_mapping[j] for j in denver_cores])
+    current_arm_apps = sorted([curr_mapping_ids[i] for i in arm_cores])
+    current_denver_apps = sorted([curr_mapping_ids[j] for j in denver_cores])
 
     for arm_apps in combinations(range(num_apps), len(arm_cores)):
         if sorted(arm_apps) == current_arm_apps:
@@ -40,12 +40,12 @@ def generate_unique_mappings(current_mapping, arm_cores, denver_cores, num_apps)
 
     return unique_mappings
 
-def construct_row(dvfs, current_mapping, current_features, new_mapping, current_efficiency):
+def construct_row(dvfs, curr_mapping_ids, current_features, new_mapping, current_efficiency):
     data_row = np.zeros(32)
     data_row[0:18] = current_features
     data_row[18] = current_efficiency / 1e9
     data_row[19] = dvfs
-    data_row[20:26] = current_mapping
+    data_row[20:26] = curr_mapping_ids
     data_row[26:32] = new_mapping
     data_row[0] /= 1e9
     data_row[1] /= 1e7
@@ -68,12 +68,75 @@ def construct_row(dvfs, current_mapping, current_features, new_mapping, current_
     #print(data_row)
     return data_row
 
-#TODO: implement this
-def idsToMap(ids):
-    return ids
-#TODO: implement this
-def mapsToIds(map):
+def getMappingFromIds(ids, curr_map, original_map):
+    map =[]
+    for id in ids:
+        app = original_map[id]
+        map.append(app)
+    for aid in range(len(curr_map)):
+        if "*" in curr_map[aid]:
+            for x in range(len(map)):
+                if map[x] in curr_map[aid]:
+                    map[x] = map[x] + "*"
     return map
+
+
+def isMissing(app, map):
+    for x in range(len(map)):
+        if app == map[x]:
+            return False
+    return True
+
+def clearMap(map):
+    tmp = list(map)
+    for x in range(len(map)):
+        if "*" in map[x]:
+            tmp[x] = ''
+    return tmp
+
+def insertFirstEmpty(app, map):
+    for x in range(len(map)):
+        if map[x] == '':
+            map[x] = app
+            break
+
+ 
+def fixMap(curr_map, new_map):
+    tmp =  clearMap(new_map)
+    for x in range(len(curr_map)):
+        if isMissing(curr_map[x], tmp):
+            insertFirstEmpty(curr_map[x], tmp)
+    
+    return tmp
+            
+            
+
+
+
+#['spec-milc', 'spec-namd', 'spec-mcf', './tcc', 'spec-astar', 'splash-cholesky*'] curr
+#['spec-milc', 'spec-namd', 'splash-cholesky*', 'splash-cholesky*', './tcc', 'spec-astar'] new
+
+def getIdsFromMappings(original_map, curr_mapping_ids):
+    ids = []
+    for x in range(len(curr_mapping_ids)):
+        rm = 0
+        if "*" in curr_mapping_ids[x]:
+            id = original_map.index(curr_mapping_ids[x][:-1])
+        else:
+            id = original_map.index(curr_mapping_ids[x])
+        ids.append(id)
+    return ids
+    
+
+def getMissingAppsIds(mapping):
+    missing = []
+    for x in range (len(mapping)):
+        if "*" in mapping[x]:
+            missing.append(x)
+    return missing
+
+
+
 
 class NeuralNet(Policy):
     def __init__(self, base_map=None):
@@ -83,18 +146,25 @@ class NeuralNet(Policy):
         self.scaler = joblib.load('scaler.save')
 
 
-
-    def executePolicy(self, base_map, app_dict=None, dvfs=None, current_features=None, 
+    def executePolicy(self, curr_map, original_map=None, dvfs=None, current_features=None, 
                       current_efficiency=None):
-        
-        #replace with a function to find which apps are missing
-        my_none_apps = []
+    
         
         #replace with a function than translates to ids from app names
-        current_mapping = mapsToIds(base_map)
+        curr_mapping_ids = getIdsFromMappings(original_map, curr_map)
+
+        #replace with a function to find which apps are missing
+        my_none_apps = []
+        my_none_idx = getMissingAppsIds(curr_map)
+        for idx in my_none_idx:
+            my_none_apps.append(curr_mapping_ids[idx])
+
+        # print("none apps: ", my_none_apps)
+
+        # print("current mapping (ids)", curr_mapping_ids)
         
         #first get all the mappings from  the current one
-        all_unique_mappings = generate_unique_mappings(current_mapping, arm_cores, denver_cores, num_apps)
+        all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
         unique_final_mappings = []
         for perm in all_unique_mappings:
             perm = list(perm)
@@ -108,12 +178,12 @@ class NeuralNet(Policy):
         
         #print(unique_final_mappings)
         
-        predictions =[]
+
         max = 0
         best = -1
         for mapping in unique_set_of_mappings:
             
-            data_row = construct_row(dvfs, current_mapping, current_features, mapping, current_efficiency) #divided by 1e8
+            data_row = construct_row(dvfs, curr_mapping_ids, current_features, mapping, current_efficiency) #divided by 1e8
             #print("\n",data_row)
             #print("New row with mapping: ", mapping)
             scaled_features = self.scaler.transform([data_row[indices_of_features_to_scale]])
@@ -130,22 +200,31 @@ class NeuralNet(Policy):
                 best = mapping
             #predictions.append(pred)
             #end = timer()
-            #print("prediction takes : ", end-start)               
-        return idsToMap(best)
+            #print("prediction takes : ", end-start)
+        #print("best map id: ", best)  
+        best_map = getMappingFromIds(best, curr_map, original_map)
+        #print("Best map from inside: ", best_map)           
+        return fixMap(curr_map, best_map)
 
 
-print("initialing th policy")
-pol = NeuralNet()
-current_mapping = [3,2,0,1,4,5]
-current_features = [423337366,177314997,5435930,2212295672,871853377,18356755,809465059,487286628,27715060,1224008353,333157686,16508741,317840145,152323920,1287185,987232516,308000083,22870347]
-current_efficiency = 1643967834.6175015
-print("===> Given the current efficiency: ", current_efficiency/1e9)
-dvfs = 1 
+# print("initialing th policy")
+# pol = NeuralNet()
 
-print("executing the policy")
-start = timer()
-pred = pol.executePolicy(current_mapping,None, dvfs, current_features, current_efficiency)
-end = timer()
-print("Best map: ", pred)
-print("total time is", end-start)
+# original_map = ['spec-mcf', 'spec-bwaves', 'splash-cholesky', './tcc', 'spec-astar', 'splash-raytrace']
+# curr_map = ['spec-mcf*', './tcc', 'spec-bwaves', 'splash-cholesky', 'spec-astar*', 'splash-raytrace*']
+
+# curr_mapping_ids = [3,2,0,1,4,5]
+# current_features = [423337366,177314997,5435930,2212295672,871853377,18356755,809465059,487286628,27715060,1224008353,333157686,16508741,317840145,152323920,1287185,987232516,308000083,22870347]
+# current_efficiency = 1643967834.6175015
+# print("===> Given the current efficiency: ", current_efficiency/1e9)
+# dvfs = 1 
+
+# print("executing the policy")
+# print("original map: ", original_map)
+# print("current map: ", curr_map)
+# start = timer()
+# pred = pol.executePolicy(curr_map, original_map, dvfs, current_features, current_efficiency)
+# end = timer()
+# print("Best map: ", pred)
+# print("total time is", end-start)
 

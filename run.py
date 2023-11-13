@@ -1,7 +1,11 @@
 from config import *
 from monitor import *
 from retthreading import *
+from mitecca import *
+
 from policies import *
+
+
 
 import threading
 import sys
@@ -250,7 +254,7 @@ def executeMigration(newmap, pids):
     tmp_pids = list(pids)
     #Only apply migration if the new candidate is different than current mapping
     if (newmap != mapping):
-        #check each app for it's new core
+        #check each app for its new core
         for idx in range(len(mapping)):
             pid = pids[idx]
             #the application might have finished, so check first if it exists still
@@ -422,11 +426,23 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
     print("Waiting before applying DVFS")
     time.sleep(delay)
 
+    #(self, curr_map, original_map=None, dvfs=None, current_features=None, 
+    #                  current_efficiency=None):
+    current_features = []
+    for x in range(6):
+        current_features.append(mon.getInstructions(x))
+        current_features.append(mon.getCacheAccesses(x))
+        current_features.append(mon.getCacheMisses(x))
+                                
+    current_efficiency = mon.getEfficiency()
     #***************************************
     # Apply the policy here
-    migration = Policy.executePolicy(mapping)
+    migration = Policy.executePolicy(mapping, base_map, 0, current_features, current_efficiency )
     #
     # **************************************
+
+
+
 
 
     #now let's apply dvfs where the attacker is 
@@ -640,7 +656,7 @@ def eval_run_baseline(premaps=None):
 
 def eval_run_policy(policy, premaps= None):
     global mon
-    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    mon = Monitor("auto", refresh_rate= 1, logging=True, workdir="./results/") #refresh was 0.5
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     WORK_FOLDER = RESULTS_FOLDER + policy.name.lower() +"_" + str(current_datetime)+"/"
     
@@ -675,31 +691,23 @@ if __name__ == "__main__":
     #run_motiv()
 
     premaps = []
-    # mappfile=open("maps.txt", "w")
-    # for x in range(100):
+    mappfile=open("maps.txt", "w")
+    # for x in range(50):
     #     premaps.append(generateApps())
     # mappfile.write(str(premaps))
     # mappfile.close()
+    
+    pol2 = NeuralNet()
     premaps.append(['spec-milc', 'spec-namd', 'spec-mcf', './tcc', 'spec-astar', 'splash-cholesky'])
 
     # eval_run_baseline(premaps)
     # print("Finished baselines *************")
    
-    # print(premaps[0].index("splash-cholesky"))
-
-    # bench = 'splash-'
-    # p_prox =  'CHOLESKY'
-
-    # idx = premaps[0].index(bench + p_prox.lower())
-
-    # print(idx)
-
-   
-    pol1 = DVFS()
-    eval_run_policy(policy=pol1, premaps=premaps)
-    print("Finished sota *****************")
-    pol = FixedCoreDenver()
-    eval_run_policy(policy=pol, premaps=premaps)
+    # pol1 = DVFS()
+    # eval_run_policy(policy=pol1, premaps=premaps)
+    # print("Finished sota *****************")
+    #pol = FixedCoreDenver()
+    eval_run_policy(policy=pol2, premaps=premaps)
     
 
 
