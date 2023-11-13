@@ -16,9 +16,10 @@ from random import randrange
 import argparse
 
 
-#available_apps = ['splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
 available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
-                  'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk']
+                  'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk',
+                  'splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
+                  'splash-fmm']
 #'spec-omnetpp'
 #'spec-povray', 'spec-gromacs', 'spec-cactusADM',
 tcc = "./tcc"
@@ -171,23 +172,30 @@ def getPIDThread(proc):
     str_cmd = "taskset -c 0 pidof " + proc
     command = str_cmd.split(" ")
     pid = -1
-    print(str_cmd)
+    #print(str_cmd)
+    tries = 0
+    if "CHOLESKY" in proc:
+        time.sleep(1)
     while not found:
-            p = subprocess.run(command,capture_output=True)
-            ans = p.stdout
-            try:
-                a = int(ans.decode("utf-8")) + 1 - 1
+        p = subprocess.run(command,capture_output=True)
+        ans = p.stdout
+        try:
+            a = int(ans.decode("utf-8")) + 1 - 1
+            found = True
+            pid = a
+        except:
+            tries+=1
+            time.sleep(0.005)
+            if tries >= 100:
+                print("Warning: Process ", proc, " has probably finished")
                 found = True
-                pid = a
-            except:
-                time.sleep(0.005)
     return pid
 
 
 #this is an overkill, I am not sorry.
 def getPIDs(mapping):
     procs = getProcessNamesFromMap(mapping)
-    print(procs)
+    #print(procs)
     pids = [-1,-1,-1,-1,-1,-1]
     a = RetThread(target=getPIDThread, args=(procs[0],))
     b = RetThread(target=getPIDThread, args=(procs[1],))
@@ -195,7 +203,7 @@ def getPIDs(mapping):
     d = RetThread(target=getPIDThread, args=(procs[3],))
     e = RetThread(target=getPIDThread, args=(procs[4],))
     f = RetThread(target=getPIDThread, args=(procs[5],))
-    print("[Thread team]: getting pids in parallel")
+    #print("[Thread team]: getting pids in parallel")
     a.start()
     b.start()
     c.start()
@@ -223,7 +231,7 @@ def setAffinity(pid, core):
         return True
    
 def applyDVFS(core):
-    f = threading.Thread(target=startDVFS, args=(core))
+    f = threading.Thread(target=startDVFS, args=(core,))
     f.start()
 
 
@@ -334,7 +342,7 @@ def run_simple_dvfs_after_delay(base_map, delay, workdir=None):
         if "tcc" in mapping[c]:
             attack_core = c
     print("Applying DVFS to core: " + str(attack_core))
-    applyDVFS(str(attack_core))
+    applyDVFS(attack_core)
     print("Waiting for workload to finish")
     #and now let's wait for the workload to finish
     ta.join()
@@ -375,7 +383,7 @@ def run_simple_migrate_dvfs(base_map, delay, migration, workdir=None):
         if "tcc" in migration[c]:
             attack_core = c
     print("Applying DVFS to core: " + str(attack_core))
-    applyDVFS(str(attack_core))
+    applyDVFS(attack_core)
 
     #then migrate
     pids = executeMigration(migration, pids)
@@ -428,7 +436,7 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
         if "tcc" in migration[c]:
             attack_core = c
     print("Applying DVFS to core: " + str(attack_core))
-    applyDVFS(str(attack_core))
+    applyDVFS(attack_core)
 
     #then migrate
     pids = executeMigration(migration, pids)
@@ -486,7 +494,7 @@ def run_experiment(base_map, delay):
     for c in range(len(migration)):
         if "tcc" in migration[c]:
             attack_core = c
-    applyDVFS(str(attack_core))
+    applyDVFS(attack_core)
     log_file.write("[DVFS]: Applying DVFS to core " + str(attack_core) + "\n")
 
 
@@ -602,6 +610,7 @@ def eval_run_sota(premaps=None):
         for m in range(len(premaps)):
             RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
             os.mkdir(RUN_DIR)
+            print("**********SOTA Run: " + str(m) + "*********************")
             run_simple_dvfs_after_delay(premaps[m], delay = sota_delay, workdir = RUN_DIR)
 
 
@@ -625,6 +634,7 @@ def eval_run_baseline(premaps=None):
         for m in range(len(premaps)):
             RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
             os.mkdir(RUN_DIR)
+            print("**********Baseline Run: " + str(m) + "*********************")
             run_simple(premaps[m], workdir = RUN_DIR)
 
 
@@ -650,6 +660,7 @@ def eval_run_policy(policy, premaps= None):
         for m in range(len(premaps)):
             RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
             os.mkdir(RUN_DIR)
+            print("**********" + policy.name + "Run: " + str(m) + "*********************")
             run_with_policy(premaps[m],  delay = sota_delay, Policy=policy, workdir = RUN_DIR)
 
 
@@ -657,23 +668,35 @@ def eval_run_policy(policy, premaps= None):
     
 if __name__ == "__main__":
     startClean()
+    restoreFreqs()
     #eval_eval_run_sota()
     #eval_run_baseline()
     #run_training() 
     #run_motiv()
 
     premaps = []
-    mappfile=open("maps.txt", "w")
-    for x in range(1):
-        premaps.append(generateApps())
-    mappfile.write(str(premaps))
-    mappfile.close()
+    # mappfile=open("maps.txt", "w")
+    # for x in range(100):
+    #     premaps.append(generateApps())
+    # mappfile.write(str(premaps))
+    # mappfile.close()
+    premaps.append(['spec-milc', 'spec-namd', 'spec-mcf', './tcc', 'spec-astar', 'splash-cholesky'])
 
+    # eval_run_baseline(premaps)
+    # print("Finished baselines *************")
+   
+    # print(premaps[0].index("splash-cholesky"))
 
-    eval_run_baseline(premaps)
-    print("Finished baselines *************")
-    print(premaps)
-    eval_run_sota(premaps)
+    # bench = 'splash-'
+    # p_prox =  'CHOLESKY'
+
+    # idx = premaps[0].index(bench + p_prox.lower())
+
+    # print(idx)
+
+   
+    pol1 = DVFS()
+    eval_run_policy(policy=pol1, premaps=premaps)
     print("Finished sota *****************")
     pol = FixedCoreDenver()
     eval_run_policy(policy=pol, premaps=premaps)
