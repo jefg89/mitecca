@@ -1,3 +1,5 @@
+from itertools import combinations
+
 class Policy:
     def __init__(self, base_map=None):
         self._bmap = base_map
@@ -11,8 +13,8 @@ class DVFS(Policy):
         super().__init__(base_map)
         self.name ="DVFS"
     
-    def executePolicy(self):
-        return self._bmap
+    def executePolicy(self, curr_map):
+        return curr_map
 
 #Naive: always move to first denver core (1)
 class FixedCoreDenver(Policy):
@@ -30,6 +32,9 @@ class FixedCoreDenver(Policy):
         tmp_map[index] = moving_app
         tmp_map[1] = './tcc'
         return tmp_map
+
+
+
 
 
 
