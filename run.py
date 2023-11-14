@@ -19,6 +19,9 @@ from random import randrange
 
 import argparse
 
+lock = threading.Lock()
+end_of_experiment = False
+
 
 available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
                   'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk',
@@ -56,8 +59,10 @@ def startWorkFunc(app_name, core):
             if app_short in mapping[idx]:
                 core = idx
         
-        mapping[core] = mapping[core]+"*"
-        print("[Core " + str(core) +"]: " + app_name + " finished execution!" )
+        with lock:
+            idcore = mapping.index(app_name)
+            mapping[idcore] = mapping[idcore]+"*"
+            print("[Core " + str(idcore) +"]: " + app_name + " finished execution!" )
         
 
 
@@ -70,6 +75,7 @@ def killProc(proc_name):
     p = subprocess.Popen(command, stdout=subprocess.PIPE)
     p.wait()
     
+
 
 def makeThreads(mapping):
     #creating threads
@@ -91,6 +97,15 @@ def makeThreads(mapping):
     return a,b,c,d,e,f
 
 
+def waitForThreads(a, b, c, d, e, f):
+    a.join()
+    b.join()
+    c.join()
+    d.join()
+    e.join()
+    f.join()
+    global end_of_experiment
+    end_of_experiment = True
 
 
 def startClean():
@@ -224,6 +239,8 @@ def getPIDs(mapping):
 
     return pids
 
+def getCluster(core):
+    return  int((core == 1 ) | (core == 2))
 def setAffinity(pid, core):
     cmd_str = "taskset -cp " + str(core) + " " + str(pid)
     command = cmd_str.split(" ")    
@@ -274,8 +291,9 @@ def executeMigration(newmap, pids):
                 newmap[new_idx] = newmap[new_idx] +"*"
                 #then set the pid to undefined (-1)
                 tmp_pids[new_idx] = -1
-        #finally make the current mapping as the new one                
-        mapping = newmap
+        #finally make the current mapping as the new one
+        with lock:    
+            mapping = newmap
     return tmp_pids  
 
 
@@ -362,7 +380,6 @@ def run_simple_dvfs_after_delay(base_map, delay, workdir=None):
     print("Experiment finished successfully")
     print("Total execution time = ", str(round(elapsed,2)) + "s")
     killProc("tcc")   
-    killProc("dvfs.sh")
     time.sleep(1)
     restoreFreqs() 
     
@@ -418,52 +435,69 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
         mon.setworkdir(workdir)
     start = timer()
     mon.start()
+    time.sleep(1)
     print("Current mapping: " + str(base_map))
     ta,tb,tc,td,te,tf = makeThreads(base_map)
     pids = getPIDs(mapping)
+    waiter =  threading.Thread(target=waitForThreads, args=(ta,tb,tc,td,te,tf,))
+    waiter.start()
     print(pids)
     # wait for delay before applying dvfs
-    print("Waiting before applying DVFS")
+    print("Waiting from detector")
     time.sleep(delay)
 
-    #(self, curr_map, original_map=None, dvfs=None, current_features=None, 
-    #                  current_efficiency=None):
-    current_features = []
-    for x in range(6):
-        current_features.append(mon.getInstructions(x))
-        current_features.append(mon.getCacheAccesses(x))
-        current_features.append(mon.getCacheMisses(x))
-                                
-    current_efficiency = mon.getEfficiency()
-    #***************************************
-    # Apply the policy here
-    migration = Policy.executePolicy(mapping, base_map, 0, current_features, current_efficiency )
-    #
-    # **************************************
+    prev_cluster = -1
+    dvfs = 0
+    ## replace wiith while
+    global end_of_experiment 
+    while not end_of_experiment:
+        start_=timer()
+        current_features = []
+        for x in range(6):
+            current_features.append(mon.getInstructions(x))
+            current_features.append(mon.getCacheAccesses(x))
+            current_features.append(mon.getCacheMisses(x))                        
+        current_efficiency = mon.getEfficiency()
+        #print(current_features)
+        #print(current_efficiency)
+        #print("original ", base_map)
+        #print("current ", mapping)
 
-
-
-
-
-    #now let's apply dvfs where the attacker is 
-    #apply dvfs
-    attack_core = -1
-    for c in range(len(migration)):
-        if "tcc" in migration[c]:
-            attack_core = c
-    print("Applying DVFS to core: " + str(attack_core))
-    applyDVFS(attack_core)
-
-    #then migrate
-    pids = executeMigration(migration, pids)
-    print("Waiting for workload to finish")
-    #and now let's wait for the workload to finish
-    ta.join()
-    tb.join()
-    tc.join()
-    td.join()
-    te.join()
-    tf.join()
+        #***************************************
+        # Apply the policy here
+        with lock:
+            migration = Policy.executePolicy(mapping, base_map, dvfs, current_features, current_efficiency )
+        #
+        # **************************************
+        #print("decision from policy : ", migration)
+        #now let's apply dvfs where the attacker is 
+        #apply dvfs
+        for c in range(len(migration)):
+            if "tcc" in migration[c]:
+                attack_core = c
+        print("Applying DVFS to core: " + str(attack_core))
+        curr_cluster = getCluster(attack_core)
+        
+        if (curr_cluster != prev_cluster):
+            killProc("dvfs.sh")
+            time.sleep(0.1)
+            restoreFreqs()
+            print("prev ", prev_cluster)
+            print("current = ", curr_cluster)
+            applyDVFS(attack_core)
+        prev_cluster = curr_cluster
+        dvfs = 1
+        #then migrate
+        pids = executeMigration(migration, pids)
+        end_=timer()
+        #print("time is ", end_-start_)
+        #time.sleep(0.5)
+        diff = end_-start_
+        if diff < 1:
+            time.sleep(diff)
+    
+    print("Finishing")
+        #and now let's wait for the workload to finish
 
     mon.stop()
     end = timer()
@@ -473,7 +507,8 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
     killProc("tcc")   
     killProc("dvfs.sh")
     time.sleep(1)
-    restoreFreqs() 
+    restoreFreqs()
+    end_of_experiment = False
 
 
 
@@ -606,7 +641,7 @@ def run_training():
 
 def eval_run_sota(premaps=None):
     global mon
-    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    mon = Monitor("auto", refresh_rate= 1, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     WORK_FOLDER = RESULTS_FOLDER + "sota_" + str(current_datetime)+"/"
     
@@ -633,7 +668,7 @@ def eval_run_sota(premaps=None):
 
 def eval_run_baseline(premaps=None):
     global mon
-    mon = Monitor("auto", refresh_rate= 0.5, logging=True, workdir="./results/")
+    mon = Monitor("auto", refresh_rate= 1, logging=True, workdir="./results/")
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     WORK_FOLDER = RESULTS_FOLDER + "baseline_" + str(current_datetime)+"/"
     
@@ -691,23 +726,22 @@ if __name__ == "__main__":
     #run_motiv()
 
     premaps = []
-    mappfile=open("maps.txt", "w")
-    # for x in range(50):
-    #     premaps.append(generateApps())
-    # mappfile.write(str(premaps))
-    # mappfile.close()
-    
-    pol2 = NeuralNet()
-    premaps.append(['spec-milc', 'spec-namd', 'spec-mcf', './tcc', 'spec-astar', 'splash-cholesky'])
+    mappfile=open("results/maps.txt", "w")
+    for x in range(100):
+        premaps.append(generateApps())
+    mappfile.write(str(premaps))
+    mappfile.close()
 
-    # eval_run_baseline(premaps)
-    # print("Finished baselines *************")
-   
-    # pol1 = DVFS()
-    # eval_run_policy(policy=pol1, premaps=premaps)
-    # print("Finished sota *****************")
-    #pol = FixedCoreDenver()
+    eval_run_baseline(premaps)
+    print("Finished baselines *************")
+    pol1 = DVFS()
+    eval_run_policy(policy=pol1, premaps=premaps)
+    print("Finished sota *****************")
+    pol2 = FixedCoreDenver()
     eval_run_policy(policy=pol2, premaps=premaps)
+    print("Finished  Fixed *****************")
+    pol3 = NeuralNet()
+    eval_run_policy(policy=pol3, premaps=premaps)
     
 
 

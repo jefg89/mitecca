@@ -71,13 +71,11 @@ def construct_row(dvfs, curr_mapping_ids, current_features, new_mapping, current
 def getMappingFromIds(ids, curr_map, original_map):
     map =[]
     for id in ids:
-        app = original_map[id]
+        if id < 0:
+            app = ""
+        else:
+            app = original_map[id]
         map.append(app)
-    for aid in range(len(curr_map)):
-        if "*" in curr_map[aid]:
-            for x in range(len(map)):
-                if map[x] in curr_map[aid]:
-                    map[x] = map[x] + "*"
     return map
 
 
@@ -87,12 +85,7 @@ def isMissing(app, map):
             return False
     return True
 
-def clearMap(map):
-    tmp = list(map)
-    for x in range(len(map)):
-        if "*" in map[x]:
-            tmp[x] = ''
-    return tmp
+
 
 def insertFirstEmpty(app, map):
     for x in range(len(map)):
@@ -102,19 +95,13 @@ def insertFirstEmpty(app, map):
 
  
 def fixMap(curr_map, new_map):
-    tmp =  clearMap(new_map)
+    tmp =  list(new_map)
     for x in range(len(curr_map)):
         if isMissing(curr_map[x], tmp):
             insertFirstEmpty(curr_map[x], tmp)
     
     return tmp
             
-            
-
-
-
-#['spec-milc', 'spec-namd', 'spec-mcf', './tcc', 'spec-astar', 'splash-cholesky*'] curr
-#['spec-milc', 'spec-namd', 'splash-cholesky*', 'splash-cholesky*', './tcc', 'spec-astar'] new
 
 def getIdsFromMappings(original_map, curr_mapping_ids):
     ids = []
@@ -134,7 +121,6 @@ def getMissingAppsIds(mapping):
         if "*" in mapping[x]:
             missing.append(x)
     return missing
-
 
 
 
@@ -159,9 +145,9 @@ class NeuralNet(Policy):
         for idx in my_none_idx:
             my_none_apps.append(curr_mapping_ids[idx])
 
-        # print("none apps: ", my_none_apps)
+        #print("none apps: ", my_none_apps)
 
-        # print("current mapping (ids)", curr_mapping_ids)
+        #print("current mapping (ids)", curr_mapping_ids)
         
         #first get all the mappings from  the current one
         all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
@@ -172,8 +158,11 @@ class NeuralNet(Policy):
                 if app in my_none_apps:
                     perm[i] = -1
             unique_final_mappings.append(perm)
+        unique_final_mappings.append(curr_mapping_ids)
 
         unique_set_of_mappings = set(tuple(i) for i in unique_final_mappings)
+        # print("current: ", curr_mapping_ids)
+        # print("unique: ", unique_set_of_mappings )
        
         
         #print(unique_final_mappings)
@@ -201,8 +190,9 @@ class NeuralNet(Policy):
             #predictions.append(pred)
             #end = timer()
             #print("prediction takes : ", end-start)
-        #print("best map id: ", best)  
-        best_map = getMappingFromIds(best, curr_map, original_map)
+        #print("best map id: ", best, "in list form ", list(best))
+      
+        best_map = getMappingFromIds(list(best), curr_map, original_map)
         #print("Best map from inside: ", best_map)           
         return fixMap(curr_map, best_map)
 
@@ -210,12 +200,15 @@ class NeuralNet(Policy):
 # print("initialing th policy")
 # pol = NeuralNet()
 
-# original_map = ['spec-mcf', 'spec-bwaves', 'splash-cholesky', './tcc', 'spec-astar', 'splash-raytrace']
-# curr_map = ['spec-mcf*', './tcc', 'spec-bwaves', 'splash-cholesky', 'spec-astar*', 'splash-raytrace*']
+# original_map =   ['splash-radix', 'spec-gcc', 'spec-lbm', 'spec-gobmk', 'spec-mcf', './tcc']
+# curr_map = ['splash-radix', 'spec-gobmk', 'spec-mcf', 'spec-gcc*', 'spec-lbm*', './tcc']
 
-# curr_mapping_ids = [3,2,0,1,4,5]
-# current_features = [423337366,177314997,5435930,2212295672,871853377,18356755,809465059,487286628,27715060,1224008353,333157686,16508741,317840145,152323920,1287185,987232516,308000083,22870347]
-# current_efficiency = 1643967834.6175015
+
+
+
+# current_features =[813385517, 147779097, 5040967, 13013, 8007, 257, 75438024, 40632611, 986594, 2007482144, 830776678, 11681729, 33600390, 15234409, 741180, 813323388, 397199337, 614489]
+
+# current_efficiency = 2254150593.7612915
 # print("===> Given the current efficiency: ", current_efficiency/1e9)
 # dvfs = 1 
 
@@ -227,4 +220,5 @@ class NeuralNet(Policy):
 # end = timer()
 # print("Best map: ", pred)
 # print("total time is", end-start)
+
 
