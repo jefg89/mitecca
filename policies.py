@@ -13,8 +13,8 @@ class DVFS(Policy):
         super().__init__(base_map)
         self.name ="DVFS"
     
-    def executePolicy(self, curr_map, original_map=None, dvfs=None, current_features=None, 
-                      current_efficiency=None):
+    def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
+                      current_efficiency=None, attack_core=None):
         return curr_map
 
 #Naive: always move to first denver core (1)
@@ -23,8 +23,8 @@ class FixedCoreDenver(Policy):
         super().__init__(base_map)
         self.name = "FixedCore"
     
-    def executePolicy(self, curr_map, original_map=None, dvfs=None, current_features=None, 
-                      current_efficiency=None):
+    def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
+                      current_efficiency=None, attack_core=None):
         index = -1
         for idx  in range(len(curr_map)):
             if "tcc" in curr_map[idx]:

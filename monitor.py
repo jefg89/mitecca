@@ -53,7 +53,7 @@ class Monitor:
                 os.mkdir(RESULTS_FOLDER+"/tmp/")
             #print("using workfile: " + self.__workdir)
             self.__log_instr = open(self.__workdir+ "execEffs.log", "w")
-            #self.__log_power = open(self.__workdir + "execPower.log", "w")
+            self.__log_power = open(self.__workdir + "execPower.log", "w")
     
     def stop(self):
         self.__isrunning = False
@@ -65,7 +65,7 @@ class Monitor:
         self.__power_thread.join()
         if self.__logging:
             self.__log_instr.close()
-            #self.__log_power.close()
+            self.__log_power.close()
         #let's clean before turning off
         self.__reset()
         time.sleep(0.1)
@@ -149,7 +149,7 @@ class Monitor:
             self.__core_info[c] = self.__findStatsByCore(c)
         if self.__logging:
             self.__log_instr.write(str(self.getEfficiency())+"\n")
-            #self.__log_power.write(str(self.__power) + "\n") 
+            self.__log_power.write(str(self.__power) + "\n") 
 
     def __updatePower(self):
         curr_power = self.__findPower()
