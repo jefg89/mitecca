@@ -15,7 +15,7 @@ class DVFS(Policy):
     
     def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
                       current_efficiency=None, attack_core=None):
-        return curr_map
+        return curr_map, 0
 
 #Naive: always move to first denver core (1)
 class FixedCoreDenver(Policy):
@@ -33,7 +33,27 @@ class FixedCoreDenver(Policy):
         moving_app = curr_map[1]
         tmp_map[index] = moving_app
         tmp_map[1] = './tcc'
-        return tmp_map
+        return tmp_map, 0
+
+#Naive: always move to first arm core (5)
+class FixedCoreARM(Policy):
+    def __init__(self, base_map=None):
+        super().__init__(base_map)
+        self.name = "FixedCoreARM"
+    
+    def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
+                      current_efficiency=None, attack_core=None):
+        index = -1
+        for idx  in range(len(curr_map)):
+            if "tcc" in curr_map[idx]:
+                index = idx
+        tmp_map = list(curr_map)
+        moving_app = curr_map[5]
+        tmp_map[index] = moving_app
+        tmp_map[5] = './tcc'
+        return tmp_map, 0
+
+
 
 
 

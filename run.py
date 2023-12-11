@@ -25,9 +25,9 @@ end_of_experiment = False
 
 available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
                   'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk',
-                  'spec-povray', 'spec-gromacs', 'spec-cactusADM', 'spec-omnetpp',
-                  'splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
-                  'splash-fmm']
+                  'spec-povray', 'spec-gromacs', 'spec-cactusADM', 'spec-omnetpp', 'spec-hmmer', 'spec-leslie3d']
+                  #'splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
+                  #'splash-fmm']
 #'spec-omnetpp'
 #'spec-povray', 'spec-gromacs', 'spec-cactusADM',
 tcc = "./tcc"
@@ -476,8 +476,11 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
             migration, pred_eff = Policy.executePolicy(mapping, base_map, curr_dvfs, current_features, current_efficiency, attack_core)
         #
         # **************************************
+
        
         print("decision from policy : ", migration, "with eff: ", pred_eff)
+        #migration = fixedCoreProxy(mapping)
+
         #now let's apply dvfs where the attacker is 
         #apply dvfs
         for c in range(len(migration)):
@@ -503,10 +506,10 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
         #if diff < 1:
         print("**************  Current map: ", mapping, "*******************")
         time.sleep(1)
-        after_eff =  mon.getEfficiency()/1e9
-        print("input efficiency was: ", current_efficiency/1e9,
-              "Prediction was: ", pred_eff, 
-              "After efficiency is: ", after_eff)
+        #after_eff =  mon.getEfficiency()/1e9
+        #print("input efficiency was: ", current_efficiency/1e9,
+        #      "Prediction was: ", pred_eff, 
+        #      "After efficiency is: ", after_eff)
     
     print("Finishing")
         #and now let's wait for the workload to finish
@@ -762,6 +765,16 @@ def eval_run_policy(policy, premaps= None):
         exefile.close()
 
 
+def fixedCoreProxy(curr_map):
+    index = -1
+    for idx  in range(len(curr_map)):
+        if "tcc" in curr_map[idx]:
+            index = idx
+    tmp_map = list(curr_map)
+    moving_app = curr_map[1]
+    tmp_map[index] = moving_app
+    tmp_map[1] = './tcc'
+    return tmp_map
 
     
 if __name__ == "__main__":
@@ -769,26 +782,28 @@ if __name__ == "__main__":
     restoreFreqs()
     #eval_eval_run_sota()
     #eval_run_baseline()
-    run_training() 
+    #run_training() 
     #run_motiv()
-
-    # premaps = []
+    num_maps = 100
+    premaps = []
     # mappfile=open("results/maps.txt", "w")
-    # for x in range(1):
+    # for x in range(num_maps):
     #     premaps.append(generateApps())
     # mappfile.write(str(premaps))
     # mappfile.close()
-
-    # # eval_run_baseline(premaps)
-    # # print("Finished baselines *************")
-    # # pol1 = DVFS()
-    # # eval_run_policy(policy=pol1, premaps=premaps)
-    # # print("Finished sota *****************")
-    # # pol2 = FixedCoreDenver()
-    # # eval_run_policy(policy=pol2, premaps=premaps)
-    # # print("Finished  Fixed *****************")
+    premaps = [['spec-zeusmp', 'spec-astar', 'spec-povray', 'spec-lbm', 'spec-omnetpp', './tcc'], ['spec-bzip2', 'spec-leslie3d', 'spec-bwaves', 'spec-h264ref', 'spec-gromacs', './tcc'], ['spec-leslie3d', 'spec-cactusADM', 'spec-povray', 'spec-zeusmp', './tcc', 'spec-hmmer'], ['./tcc', 'spec-bzip2', 'spec-omnetpp', 'spec-hmmer', 'spec-gcc', 'spec-lbm'], ['spec-h264ref', 'spec-cactusADM', './tcc', 'spec-omnetpp', 'spec-bwaves', 'spec-gobmk'], ['./tcc', 'spec-astar', 'spec-milc', 'spec-gromacs', 'spec-lbm', 'spec-sphinx3'], ['spec-hmmer', 'spec-bwaves', './tcc', 'spec-leslie3d', 'spec-h264ref', 'spec-omnetpp'], ['spec-gobmk', 'spec-gromacs', 'spec-lbm', 'spec-omnetpp', './tcc', 'spec-gcc'], ['spec-bwaves', 'spec-namd', 'spec-bzip2', './tcc', 'spec-gromacs', 'spec-sphinx3'], ['spec-gobmk', 'spec-h264ref', './tcc', 'spec-namd', 'spec-astar', 'spec-lbm'], ['spec-gromacs', './tcc', 'spec-gobmk', 'spec-cactusADM', 'spec-lbm', 'spec-milc'], ['spec-zeusmp', 'spec-sphinx3', './tcc', 'spec-bzip2', 'spec-gobmk', 'spec-gcc'], ['spec-leslie3d', 'spec-cactusADM', 'spec-namd', './tcc', 'spec-gromacs', 'spec-omnetpp'], ['./tcc', 'spec-zeusmp', 'spec-astar', 'spec-leslie3d', 'spec-bzip2', 'spec-povray'], ['spec-gromacs', 'spec-leslie3d', './tcc', 'spec-gcc', 'spec-hmmer', 'spec-bzip2'], ['spec-leslie3d', 'spec-povray', 'spec-gromacs', 'spec-namd', 'spec-astar', './tcc'], ['spec-zeusmp', 'spec-omnetpp', './tcc', 'spec-lbm', 'spec-gcc', 'spec-namd'], ['spec-povray', 'spec-h264ref', 'spec-hmmer', 'spec-sphinx3', 'spec-leslie3d', './tcc'], ['spec-namd', './tcc', 'spec-povray', 'spec-gobmk', 'spec-gcc', 'spec-hmmer'], ['spec-bzip2', 'spec-omnetpp', 'spec-povray', 'spec-lbm', './tcc', 'spec-cactusADM'], ['spec-mcf', 'spec-bzip2', 'spec-hmmer', './tcc', 'spec-gromacs', 'spec-cactusADM'], ['spec-mcf', './tcc', 'spec-gromacs', 'spec-cactusADM', 'spec-gcc', 'spec-bwaves'], ['spec-namd', 'spec-astar', 'spec-lbm', 'spec-leslie3d', './tcc', 'spec-hmmer'], ['spec-h264ref', 'spec-povray', './tcc', 'spec-astar', 'spec-gobmk', 'spec-bwaves'], ['./tcc', 'spec-milc', 'spec-zeusmp', 'spec-omnetpp', 'spec-astar', 'spec-namd'], ['spec-namd', 'spec-astar', 'spec-milc', 'spec-h264ref', './tcc', 'spec-leslie3d'], ['spec-bwaves', 'spec-sphinx3', 'spec-cactusADM', 'spec-hmmer', './tcc', 'spec-h264ref'], ['spec-h264ref', 'spec-mcf', 'spec-namd', 'spec-gcc', './tcc', 'spec-lbm'], ['spec-hmmer', 'spec-cactusADM', 'spec-astar', 'spec-leslie3d', './tcc', 'spec-gromacs'], ['spec-namd', 'spec-gcc', 'spec-milc', './tcc', 'spec-cactusADM', 'spec-lbm'], ['spec-povray', 'spec-milc', './tcc', 'spec-gcc', 'spec-astar', 'spec-gromacs'], ['spec-leslie3d', 'spec-h264ref', './tcc', 'spec-sphinx3', 'spec-zeusmp', 'spec-omnetpp'], ['./tcc', 'spec-povray', 'spec-hmmer', 'spec-lbm', 'spec-zeusmp', 'spec-astar'], ['spec-namd', './tcc', 'spec-h264ref', 'spec-hmmer', 'spec-bwaves', 'spec-gromacs'], ['./tcc', 'spec-namd', 'spec-hmmer', 'spec-bzip2', 'spec-cactusADM', 'spec-milc'], ['./tcc', 'spec-bzip2', 'spec-h264ref', 'spec-gobmk', 'spec-cactusADM', 'spec-bwaves'], ['spec-zeusmp', 'spec-mcf', 'spec-bzip2', './tcc', 'spec-bwaves', 'spec-leslie3d'], ['spec-omnetpp', './tcc', 'spec-h264ref', 'spec-hmmer', 'spec-milc', 'spec-leslie3d'], ['spec-sphinx3', 'spec-omnetpp', 'spec-milc', './tcc', 'spec-hmmer', 'spec-astar'], ['spec-cactusADM', 'spec-gcc', 'spec-milc', './tcc', 'spec-leslie3d', 'spec-povray'], ['spec-astar', 'spec-milc', 'spec-povray', 'spec-bwaves', './tcc', 'spec-omnetpp'], ['spec-hmmer', 'spec-cactusADM', './tcc', 'spec-lbm', 'spec-bwaves', 'spec-bzip2'], ['spec-gromacs', 'spec-hmmer', 'spec-bzip2', 'spec-lbm', './tcc', 'spec-cactusADM'], ['spec-astar', 'spec-hmmer', 'spec-gcc', './tcc', 'spec-milc', 'spec-omnetpp'], ['spec-omnetpp', './tcc', 'spec-gromacs', 'spec-bwaves', 'spec-namd', 'spec-zeusmp'], ['spec-milc', 'spec-gobmk', 'spec-h264ref', 'spec-cactusADM', 'spec-hmmer', './tcc'], ['spec-gobmk', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-lbm', './tcc'], ['spec-hmmer', 'spec-namd', 'spec-milc', 'spec-gcc', 'spec-h264ref', './tcc'], ['spec-sphinx3', 'spec-omnetpp', './tcc', 'spec-bwaves', 'spec-lbm', 'spec-h264ref'], ['spec-omnetpp', 'spec-povray', 'spec-bzip2', './tcc', 'spec-milc', 'spec-mcf'], ['spec-mcf', 'spec-bwaves', 'spec-povray', 'spec-astar', 'spec-gromacs', './tcc'], ['spec-sphinx3', 'spec-namd', 'spec-h264ref', 'spec-bwaves', 'spec-milc', './tcc'], ['spec-namd', 'spec-bzip2', 'spec-zeusmp', 'spec-h264ref', 'spec-povray', './tcc'], ['spec-bwaves', 'spec-povray', './tcc', 'spec-mcf', 'spec-sphinx3', 'spec-gobmk'], ['./tcc', 'spec-gcc', 'spec-milc', 'spec-povray', 'spec-mcf', 'spec-namd'], ['spec-sphinx3', 'spec-gcc', './tcc', 'spec-bwaves', 'spec-lbm', 'spec-zeusmp'], ['./tcc', 'spec-namd', 'spec-gromacs', 'spec-mcf', 'spec-gobmk', 'spec-sphinx3'], ['spec-milc', 'spec-gobmk', 'spec-zeusmp', './tcc', 'spec-cactusADM', 'spec-hmmer'], ['./tcc', 'spec-omnetpp', 'spec-hmmer', 'spec-gromacs', 'spec-h264ref', 'spec-milc'], ['spec-gobmk', 'spec-bwaves', 'spec-zeusmp', './tcc', 'spec-gcc', 'spec-gromacs'], ['spec-gromacs', 'spec-gobmk', 'spec-zeusmp', 'spec-cactusADM', 'spec-namd', './tcc'], ['spec-h264ref', 'spec-sphinx3', 'spec-zeusmp', 'spec-lbm', './tcc', 'spec-astar'], ['spec-povray', 'spec-cactusADM', 'spec-sphinx3', 'spec-omnetpp', './tcc', 'spec-gobmk'], ['spec-hmmer', 'spec-gobmk', 'spec-mcf', 'spec-astar', './tcc', 'spec-namd'], ['spec-gcc', 'spec-leslie3d', 'spec-namd', 'spec-sphinx3', 'spec-mcf', './tcc'], ['spec-omnetpp', 'spec-milc', './tcc', 'spec-cactusADM', 'spec-sphinx3', 'spec-mcf'], ['spec-omnetpp', './tcc', 'spec-sphinx3', 'spec-leslie3d', 'spec-zeusmp', 'spec-bzip2'], ['spec-omnetpp', 'spec-bzip2', 'spec-bwaves', 'spec-hmmer', './tcc', 'spec-leslie3d'], ['spec-h264ref', 'spec-gcc', 'spec-bzip2', 'spec-omnetpp', './tcc', 'spec-povray'], ['spec-sphinx3', 'spec-milc', 'spec-zeusmp', './tcc', 'spec-mcf', 'spec-astar'], ['spec-astar', 'spec-gobmk', 'spec-gromacs', './tcc', 'spec-lbm', 'spec-bzip2'], ['spec-hmmer', './tcc', 'spec-sphinx3', 'spec-gromacs', 'spec-omnetpp', 'spec-zeusmp'], ['./tcc', 'spec-gromacs', 'spec-bwaves', 'spec-lbm', 'spec-bzip2', 'spec-zeusmp'], ['./tcc', 'spec-milc', 'spec-leslie3d', 'spec-gobmk', 'spec-hmmer', 'spec-sphinx3'], ['spec-lbm', 'spec-mcf', 'spec-gobmk', 'spec-namd', './tcc', 'spec-sphinx3'], ['spec-zeusmp', 'spec-gromacs', 'spec-lbm', 'spec-mcf', 'spec-bwaves', './tcc'], ['spec-bzip2', './tcc', 'spec-sphinx3', 'spec-povray', 'spec-gcc', 'spec-lbm'], ['spec-zeusmp', 'spec-hmmer', 'spec-gobmk', './tcc', 'spec-leslie3d', 'spec-h264ref'], ['spec-leslie3d', 'spec-milc', 'spec-mcf', 'spec-astar', './tcc', 'spec-cactusADM'], ['spec-gobmk', 'spec-lbm', 'spec-zeusmp', 'spec-cactusADM', './tcc', 'spec-leslie3d'], ['spec-mcf', 'spec-sphinx3', './tcc', 'spec-hmmer', 'spec-namd', 'spec-omnetpp'], ['./tcc', 'spec-gcc', 'spec-bzip2', 'spec-astar', 'spec-gromacs', 'spec-leslie3d'], ['spec-mcf', 'spec-hmmer', 'spec-milc', './tcc', 'spec-bzip2', 'spec-gobmk'], ['./tcc', 'spec-sphinx3', 'spec-cactusADM', 'spec-omnetpp', 'spec-gromacs', 'spec-hmmer'], ['./tcc', 'spec-hmmer', 'spec-lbm', 'spec-omnetpp', 'spec-povray', 'spec-gcc'], ['spec-gcc', 'spec-milc', 'spec-omnetpp', 'spec-h264ref', 'spec-cactusADM', './tcc'], ['spec-bwaves', 'spec-gcc', './tcc', 'spec-namd', 'spec-h264ref', 'spec-hmmer'], ['spec-namd', 'spec-sphinx3', 'spec-astar', './tcc', 'spec-bwaves', 'spec-hmmer'], ['./tcc', 'spec-lbm', 'spec-povray', 'spec-cactusADM', 'spec-namd', 'spec-astar'], ['./tcc', 'spec-lbm', 'spec-bzip2', 'spec-cactusADM', 'spec-gromacs', 'spec-astar'], ['spec-namd', 'spec-lbm', 'spec-zeusmp', './tcc', 'spec-gromacs', 'spec-astar'], ['spec-namd', 'spec-astar', './tcc', 'spec-cactusADM', 'spec-mcf', 'spec-omnetpp'], ['spec-omnetpp', 'spec-sphinx3', 'spec-gobmk', 'spec-cactusADM', 'spec-h264ref', './tcc'], ['spec-omnetpp', 'spec-lbm', './tcc', 'spec-mcf', 'spec-zeusmp', 'spec-hmmer'], ['spec-lbm', 'spec-bzip2', 'spec-namd', 'spec-gobmk', 'spec-omnetpp', './tcc'], ['spec-namd', 'spec-omnetpp', 'spec-cactusADM', 'spec-gcc', './tcc', 'spec-povray'], ['spec-gromacs', './tcc', 'spec-leslie3d', 'spec-mcf', 'spec-sphinx3', 'spec-hmmer'], ['spec-lbm', 'spec-cactusADM', 'spec-namd', 'spec-h264ref', './tcc', 'spec-gobmk'], ['spec-mcf', 'spec-bzip2', 'spec-omnetpp', 'spec-hmmer', 'spec-leslie3d', './tcc'], ['./tcc', 'spec-povray', 'spec-zeusmp', 'spec-gromacs', 'spec-astar', 'spec-gobmk']]
+    # eval_run_baseline(premaps)
+    # print("Finished baselines *************")
+    # pol1 = DVFS()
+    # eval_run_policy(policy=pol1, premaps=premaps)
+    # print("Finished sota *****************")
+    # pol2 = FixedCoreDenver()
+    # eval_run_policy(policy=pol2, premaps=premaps)
+    # print("Finished  Fixed *****************")
     # pol3 = NeuralNet()
     # eval_run_policy(policy=pol3, premaps=premaps)
+    pol4 = FixedCoreARM()
+    eval_run_policy(policy=pol4, premaps=premaps)
     
 
 

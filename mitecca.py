@@ -19,6 +19,14 @@ denver_cores = [1, 2]
 indices_of_features_to_scale = list(range(0,19))
 num_apps = 6
 
+
+def switch(array, idx1, idx2):
+    temp = list(array)
+    temp[idx1] = array[idx2]
+    temp[idx2] = array[idx1]
+    return temp 
+
+
 def generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps):
     unique_mappings = []
     current_arm_apps = sorted([curr_mapping_ids[i] for i in arm_cores])
@@ -166,18 +174,28 @@ class NeuralNet(Policy):
         #print("current mapping (ids)", curr_mapping_ids)
         
         #first get all the mappings from  the current one
-        all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
+        #all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
         unique_final_mappings = []
-        for perm in all_unique_mappings:
-            perm = list(perm)
-            for i, app in enumerate(perm):
-                if app in my_none_apps:
-                    perm[i] = -1
-            unique_final_mappings.append(perm)
+        # for perm in all_unique_mappings:
+        #     perm = list(perm)
+        #     for i, app in enumerate(perm):
+        #         if app in my_none_apps:
+        #             perm[i] = -1
+        #     unique_final_mappings.append(perm)
+
         unique_final_mappings.append(curr_mapping_ids)
+        if attack_core in arm_cores:
+            for core in denver_cores:
+                unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
+        else:
+            for core in arm_cores:
+                unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
+
 
         unique_set_of_mappings = set(tuple(i) for i in unique_final_mappings)
         # print("current: ", curr_mapping_ids)
+        #for map in unique_set_of_mappings:
+        #    print(map)
         # print("unique: ", unique_set_of_mappings )
        
         
@@ -218,28 +236,28 @@ class NeuralNet(Policy):
         return fixMap(curr_map, best_map), max
 
 
-#print("initialing th policy")
-#pol = NeuralNet()
+# print("initialing th policy")
+# pol = NeuralNet()
 
-#original_map =   ['splash-radix', './tcc', 'spec-gcc', 'spec-lbm', 'spec-gobmk', 'spec-mcf']
-#curr_map = ['splash-radix', 'spec-gobmk', 'spec-mcf', 'spec-gcc', 'spec-lbm', './tcc']
-#curr_dvfs = [1, 0, 0, 1, 1, 1]
-#attack_core = 5
+# original_map =   ['splash-radix', './tcc', 'spec-gcc', 'spec-lbm', 'spec-gobmk', 'spec-mcf']
+# curr_map = ['splash-radix', 'spec-gobmk', 'spec-mcf', 'spec-gcc', 'spec-lbm', './tcc']
+# curr_dvfs = [1, 0, 0, 1, 1, 1]
+# attack_core = 5
 
 
 
-#current_features =[813385517, 147779097, 5040967, 13013, 8007, 257, 75438024, 40632611, 986594, 2007482144, 830776678, 11681729, 33600390, 15234409, 741180, 813323388, 397199337, 614489]
-#current_efficiency = 1254150593.7612915
-#print("===> Given the current efficiency: ", current_efficiency/1e9)
-#dvfs = 1 
+# current_features =[813385517, 147779097, 5040967, 13013, 8007, 257, 75438024, 40632611, 986594, 2007482144, 830776678, 11681729, 33600390, 15234409, 741180, 813323388, 397199337, 614489]
+# current_efficiency = 1254150593.7612915
+# print("===> Given the current efficiency: ", current_efficiency/1e9)
+# dvfs = 1 
 
-#print("executing the policy")
-#print("original map: ", original_map)
-#print("current map: ", curr_map)
-#start = timer()
-#pred , eff = pol.executePolicy(curr_map, original_map, curr_dvfs, current_features, current_efficiency, attack_core)
-#end = timer()
-#print("Best map: ", pred, " with pred =", eff)
-#print("total time is", end-start)
+# print("executing the policy")
+# print("original map: ", original_map)
+# print("current map: ", curr_map)
+# start = timer()
+# pred , eff = pol.executePolicy(curr_map, original_map, curr_dvfs, current_features, current_efficiency, attack_core)
+# end = timer()
+# print("Best map: ", pred, " with pred =", eff)
+# print("total time is", end-start)
 
 
