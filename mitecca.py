@@ -1,5 +1,6 @@
 from policies import *
-
+import xgboost
+from xgboost import XGBRegressor
 import sklearn
 import itertools
 import joblib
@@ -153,6 +154,7 @@ class NeuralNet(Policy):
         #scaler = joblib.load('new_scaler.save')
         self.model = load_model('new_mitecca.h5') #('mitecca_512.h5')
         self.scaler = joblib.load('new_scaler.save') #('scaler.save')
+        self.fast = True
 
     def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
                       current_efficiency=None, attack_core=None):
@@ -174,22 +176,22 @@ class NeuralNet(Policy):
         #print("current mapping (ids)", curr_mapping_ids)
         
         #first get all the mappings from  the current one
-        #all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
+        all_unique_mappings = generate_unique_mappings(curr_mapping_ids, arm_cores, denver_cores, num_apps)
         unique_final_mappings = []
-        # for perm in all_unique_mappings:
-        #     perm = list(perm)
-        #     for i, app in enumerate(perm):
-        #         if app in my_none_apps:
-        #             perm[i] = -1
-        #     unique_final_mappings.append(perm)
+        for perm in all_unique_mappings:
+            perm = list(perm)
+            for i, app in enumerate(perm):
+                if app in my_none_apps:
+                    perm[i] = -1
+            unique_final_mappings.append(perm)
 
         unique_final_mappings.append(curr_mapping_ids)
-        if attack_core in arm_cores:
-            for core in denver_cores:
-                unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
-        else:
-            for core in arm_cores:
-                unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
+        # if attack_core in arm_cores:
+        #     for core in denver_cores:
+        #         unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
+        # else:
+        #     for core in arm_cores:
+        #         unique_final_mappings.append(switch(curr_mapping_ids, attack_core, core))
 
 
         unique_set_of_mappings = set(tuple(i) for i in unique_final_mappings)
@@ -219,8 +221,10 @@ class NeuralNet(Policy):
             #start = timer()
             #print("\n",row_scaled)
             #https://www.tensorflow.org/api_docs/python/tf/keras/Model?hl=en#predict
-            pred = float(self.model. __call__([reshaped])[0])
-            #pred = self.model.predict([row_scaled.reshape(1, -1)])
+            if self.fast:
+                pred = float(self.model. __call__([reshaped])[0])
+            else:
+                pred = self.model.predict(reshaped)[0]
             #print ("pred ", cont, " :", pred )
             #cont +=1
             if pred > max:
@@ -236,8 +240,20 @@ class NeuralNet(Policy):
         return fixMap(curr_map, best_map), max
 
 
+
+class XGBoost(NeuralNet):
+    def __init__(self, base_map=None):
+        super().__init__(base_map)
+        self.name ="XGBoost"
+        self.model = XGBRegressor()
+        self.model.load_model('trained_xgb_model.json') #('mitecca_512.h5')
+        self.scaler = joblib.load('new_scaler.save') #('scaler.save')
+        self.fast = False
+
+
+
 # print("initialing th policy")
-# pol = NeuralNet()
+# pol = XGBoost()
 
 # original_map =   ['splash-radix', './tcc', 'spec-gcc', 'spec-lbm', 'spec-gobmk', 'spec-mcf']
 # curr_map = ['splash-radix', 'spec-gobmk', 'spec-mcf', 'spec-gcc', 'spec-lbm', './tcc']
