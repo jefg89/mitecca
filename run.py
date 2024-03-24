@@ -586,7 +586,7 @@ def run_experiment(base_map, delay):
     #umm let's do it again at least of couple of times
     #but do not apply dvfs, since we are doing so already
   
-    for times in range(10):
+    for times in range(200):
         #first generate random variant
         migration = generateVariant(mapping)
         #trigger recording
@@ -631,6 +631,7 @@ def run_experiment(base_map, delay):
     td.join()
     te.join()
     tf.join()
+    killProc("receiver.sh")
     end = timer()
     elapsed = end - start
     print("Experiment finished successfully")
@@ -639,6 +640,7 @@ def run_experiment(base_map, delay):
     log_file.write("Total execution time = " + str(round(elapsed,2)) + "s\n") 
     killProc("tcc")   
     killProc("dvfs.sh")
+
     time.sleep(1)
     restoreFreqs()
     
@@ -659,8 +661,8 @@ def run_training():
     global log_file
     log_file = open(WORK_FOLDER +"/experiment.log", "w")
     
-    num_bases = 100
-    runs_per_map = 5
+    num_bases = 25
+    runs_per_map = 2
     
     global mon
     mon = Monitor("trigger", 1)
@@ -760,6 +762,9 @@ def eval_run_policy(policy, premaps= None):
             RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
             os.mkdir(RUN_DIR)
             print("**********" + policy.name + "Run: " + str(m) + "*********************")
+            cmd = "sudo ./receiver.sh " + "power_" + str(m) +".out &" 
+            command = cmd.split(" ")
+            p = subprocess.Popen(command)
             time_ = run_with_policy(premaps[m],  delay = sota_delay, Policy=policy, workdir = RUN_DIR)
             exefile.write(str(time_) + "\n")
         exefile.close()
@@ -784,31 +789,37 @@ if __name__ == "__main__":
     #eval_run_baseline()
     #run_training() 
     #run_motiv()
-    num_maps = 100
+
+    num_maps = 10
     premaps = []
-    mappfile=open("results/maps.txt", "w")
-    for x in range(num_maps):
-        premaps.append(generateApps())
-    mappfile.write(str(premaps))
-    mappfile.close()
-    #premaps = [['spec-h264ref', 'spec-omnetpp', 'spec-gcc', './tcc', 'spec-hmmer', 'spec-zeusmp'], ['spec-mcf', 'spec-povray', 'spec-sphinx3', './tcc', 'spec-zeusmp', 'spec-astar'], ['spec-zeusmp', './tcc', 'spec-sphinx3', 'spec-gcc', 'spec-omnetpp', 'spec-hmmer'], ['spec-povray', 'spec-cactusADM', 'spec-astar', 'spec-gobmk', 'spec-hmmer', './tcc'], ['spec-omnetpp', 'spec-leslie3d', 'spec-gromacs', './tcc', 'spec-sphinx3', 'spec-hmmer'], ['spec-povray', './tcc', 'spec-gobmk', 'spec-sphinx3', 'spec-namd', 'spec-gromacs'], ['spec-bwaves', './tcc', 'spec-gromacs', 'spec-omnetpp', 'spec-sphinx3', 'spec-h264ref'], ['spec-gromacs', 'spec-zeusmp', 'spec-povray', './tcc', 'spec-bwaves', 'spec-namd'], ['./tcc', 'spec-cactusADM', 'spec-sphinx3', 'spec-bzip2', 'spec-leslie3d', 'spec-povray'], ['spec-milc', 'spec-h264ref', 'spec-povray', './tcc', 'spec-gobmk', 'spec-mcf']]
-    eval_run_baseline(premaps)
-    print("Finished baselines *************")
-    pol1 = DVFS()
-    eval_run_policy(policy=pol1, premaps=premaps)
-    print("Finished sota *****************")
-    pol2 = FixedCoreDenver()
-    eval_run_policy(policy=pol2, premaps=premaps)
-    print("Finished  Fixed *****************")
+    
+    # mappfile=open("results/maps.txt", "w")
+    # for x in range(num_maps):
+    #     premaps.append(generateApps())
+    # mappfile.write(str(premaps))
+    # mappfile.close()
+    
+
+    premaps = [['spec-sphinx3', 'spec-leslie3d', 'spec-h264ref', 'spec-omnetpp', 'spec-bzip2', './tcc'], ['spec-cactusADM', 'spec-bzip2', 'spec-leslie3d', 'spec-hmmer', './tcc', 'spec-zeusmp'], ['spec-gcc', './tcc', 'spec-astar', 'spec-cactusADM', 'spec-h264ref', 'spec-leslie3d'], ['./tcc', 'spec-bzip2', 'spec-milc', 'spec-zeusmp', 'spec-omnetpp', 'spec-leslie3d'], ['spec-namd', 'spec-povray', 'spec-milc', 'spec-bwaves', 'spec-astar', './tcc'], ['./tcc', 'spec-astar', 'spec-milc', 'spec-omnetpp', 'spec-cactusADM', 'spec-gromacs'], ['spec-zeusmp', 'spec-hmmer', 'spec-gromacs', './tcc', 'spec-gobmk', 'spec-h264ref'], ['spec-lbm', 'spec-leslie3d', 'spec-bwaves', 'spec-gobmk', './tcc', 'spec-mcf'], ['spec-namd', 'spec-milc', './tcc', 'spec-omnetpp', 'spec-bwaves', 'spec-bzip2'], ['spec-cactusADM', 'spec-gcc', 'spec-astar', 'spec-omnetpp', 'spec-bwaves', './tcc']]
+    # eval_run_baseline(premaps)
+    # print("Finished baselines *************")
+    # pol1 = DVFS()
+    # eval_run_policy(policy=pol1, premaps=premaps)
+    # print("Finished sota *****************")
+    # pol2 = FixedCoreDenver()
+    # eval_run_policy(policy=pol2, premaps=premaps)
+    # print("Finished  Fixed *****************")
     pol3 = NeuralNet()
     eval_run_policy(policy=pol3, premaps=premaps)
-    pol4 = FixedCoreARM()
-    eval_run_policy(policy=pol4, premaps=premaps)
-    print("Finished  Fixed *****************")
-    pol5 = LPCMPCore()
-    eval_run_policy(policy=pol5, premaps=premaps)
+    # pol4 = FixedCoreARM()
+    # eval_run_policy(policy=pol4, premaps=premaps)
+    # print("Finished  Fixed *****************")
+    #pol5 = LPCMPCore()
+    #eval_run_policy(policy=pol5, premaps=premaps)
     pol6 = XGBoost()
     eval_run_policy(policy=pol6, premaps=premaps)
+    pol7 = RandomForest()
+    eval_run_policy(policy=pol7, premaps=premaps)
 
     
 

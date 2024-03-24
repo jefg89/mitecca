@@ -15,4 +15,4 @@ fi
 # run app $1 on core $2
 #sudo perf stat -B -ecycles:u,instructions:u -o $1.ipc 
 #perf stat -B -ecycles:u,instructions:u -o $1.ipc 
-taskset -c $2 runspec --iterations 1 --size test --action onlyrun --config $CONFIGARM --noreportable  $1
+taskset -c $2 runspec --iterations 1 --size train --action onlyrun --config $CONFIGARM --noreportable  $1

@@ -7,6 +7,7 @@ import joblib
 import numpy as np
 from tensorflow.keras.models import load_model
 from itertools import combinations
+from sklearn.ensemble import RandomForestClassifier
 
 
 import warnings
@@ -149,11 +150,12 @@ def getNewDVFS(attack_id, mapping):
 class NeuralNet(Policy):
     def __init__(self, base_map=None):
         super().__init__(base_map)
-        self.name ="NeuralNetwork"
+        self.name ="NeuralNetworkLight"
         #model = load_model('new_mitecca.h5')
         #scaler = joblib.load('new_scaler.save')
-        self.model = load_model('new_mitecca.h5') #('mitecca_512.h5')
-        self.scaler = joblib.load('new_scaler.save') #('scaler.save')
+        #self.model = load_model('nn_mitecca.h5') 
+        self.model = load_model('new_mitecca_light.h5') #('mitecca_512.h5')
+        self.scaler = joblib.load('new_scaler_2.save') #('scaler.save')
         self.fast = True
 
     def executePolicy(self, curr_map, original_map=None, curr_dvfs = None, current_features=None, 
@@ -246,14 +248,25 @@ class XGBoost(NeuralNet):
         super().__init__(base_map)
         self.name ="XGBoost"
         self.model = XGBRegressor()
-        self.model.load_model('trained_xgb_model.json') #('mitecca_512.h5')
-        self.scaler = joblib.load('new_scaler.save') #('scaler.save')
+        self.model.load_model('trained_xgb_model_light.json') #('mitecca_512.h5')
+        self.scaler = joblib.load('new_scaler_2.save') #('scaler.save')
+        self.fast = False
+
+
+class RandomForest(NeuralNet):
+    def __init__(self, base_map=None):
+        super().__init__(base_map)
+        self.name ="RandomForest"
+        self.model = joblib.load('trained_rf_model.joblib')
+        #self.model.load_model('trained_xgb_model_2.json') #('mitecca_512.h5')
+        self.scaler = joblib.load('new_scaler_2.save') #('scaler.save')
         self.fast = False
 
 
 
+
 # print("initialing th policy")
-# pol = XGBoost()
+# pol = NeuralNet()
 
 # original_map =   ['splash-radix', './tcc', 'spec-gcc', 'spec-lbm', 'spec-gobmk', 'spec-mcf']
 # curr_map = ['splash-radix', 'spec-gobmk', 'spec-mcf', 'spec-gcc', 'spec-lbm', './tcc']
@@ -275,5 +288,3 @@ class XGBoost(NeuralNet):
 # end = timer()
 # print("Best map: ", pred, " with pred =", eff)
 # print("total time is", end-start)
-
-
