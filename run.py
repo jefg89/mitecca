@@ -464,7 +464,7 @@ def run_with_policy(base_map, delay, Policy, workdir=None):
         #print("original ", base_map)
         #print("current ", mapping)
         if (attack_core == 1) | (attack_core == 2): 
-            curr_dvfs = [1,0,0,1,1,1]
+            curr_dvfs = [0,1,1,0,0,0]
         else: 
             curr_dvfs = [1,0,0,1,1,1]
         if (dvfs == 0):
