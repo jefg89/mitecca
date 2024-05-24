@@ -25,11 +25,13 @@ end_of_experiment = False
 
 available_apps = ['spec-gcc', 'spec-milc', 'spec-bzip2', 'spec-sphinx3', 'spec-astar', 'spec-lbm',
                   'spec-bwaves', 'spec-mcf', 'spec-zeusmp',  'spec-namd', 'spec-h264ref', 'spec-gobmk',
-                  'spec-povray', 'spec-gromacs', 'spec-cactusADM', 'spec-omnetpp', 'spec-hmmer', 'spec-leslie3d']
-                  #'splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
-                  #'splash-fmm']
-#'spec-omnetpp'
-#'spec-povray', 'spec-gromacs', 'spec-cactusADM',
+                  'spec-povray', 'spec-gromacs', 'spec-cactusADM', 'spec-omnetpp', 'spec-hmmer', 'spec-leslie3d',
+                  'parsec-blackscholes', 'parsec-bodytrack', 'parsec-canneal', 'parsec-dedup', 'parsec-facesim',
+                  'parsec-ferret', 'parsec-fluidanimate', 'parsec-freqmine', 'parsec-streamcluster',
+                  'parsec-swaptions', 'parsec-vips', 'parsec-x264']
+# 'splash-barnes', 'splash-cholesky', 'splash-lu', 'splash-ocean', 'splash-radix', 'splash-raytrace',
+# 'splash-fmm']
+
 tcc = "./tcc"
 
 
@@ -122,9 +124,11 @@ def restoreFreqs():
 
 def getFullApp(app_str):
     if "spec" in app_str:
-        name = SCRIPTS_DIR+"spec.sh " + app_str[5:] 
+        name = SCRIPTS_DIR + "spec.sh " + app_str[5:] 
     elif "splash" in app_str:
-        name = SCRIPTS_DIR+app_str[7:]+".sh" 
+        name = SCRIPTS_DIR + app_str[7:]+".sh" 
+    elif "parsec" in app_str:
+        name = SCRIPTS_DIR + "parsec.sh " + app_str[7:]
     else:
         name = app_str
     return name
@@ -142,6 +146,8 @@ def getProcessName(app_str):
             name = app_str[5:] +"_base.lnx64-gcc"
     elif "splash" in app_str:
         name = app_str[7:].upper()
+    elif "parsec" in app_str:
+        name = app_str[7:]
     else:
         name = "tcc"
     
@@ -631,7 +637,7 @@ def run_experiment(base_map, delay):
     td.join()
     te.join()
     tf.join()
-    killProc("receiver.sh")
+    #killProc("receiver.sh")
     end = timer()
     elapsed = end - start
     print("Experiment finished successfully")
@@ -761,10 +767,10 @@ def eval_run_policy(policy, premaps= None):
         for m in range(len(premaps)):
             RUN_DIR = WORK_FOLDER +"run_" + f"{m:03}" + "/"
             os.mkdir(RUN_DIR)
-            print("**********" + policy.name + "Run: " + str(m) + "*********************")
-            cmd = "sudo ./receiver.sh " + "power_" + str(m) +".out &" 
-            command = cmd.split(" ")
-            p = subprocess.Popen(command)
+            print("**********" + policy.name + "Run: " + str(m) + "/" + str(len(premaps)) + "*********************")
+            #cmd = "sudo ./receiver.sh " + "power_" + str(m) +".out &" 
+            #command = cmd.split(" ")
+            #p = subprocess.Popen(command)
             time_ = run_with_policy(premaps[m],  delay = sota_delay, Policy=policy, workdir = RUN_DIR)
             exefile.write(str(time_) + "\n")
         exefile.close()
@@ -790,32 +796,32 @@ if __name__ == "__main__":
     #run_training() 
     #run_motiv()
 
-    num_maps = 10
+    
     premaps = []
+    num_maps = 50
+    mappfile=open("results/maps.txt", "w")
+    for x in range(num_maps):
+       premaps.append(generateApps())
+    mappfile.write(str(premaps))
+    mappfile.close()
     
-    # mappfile=open("results/maps.txt", "w")
-    # for x in range(num_maps):
-    #     premaps.append(generateApps())
-    # mappfile.write(str(premaps))
-    # mappfile.close()
-    
-
-    premaps = [['spec-sphinx3', 'spec-leslie3d', 'spec-h264ref', 'spec-omnetpp', 'spec-bzip2', './tcc'], ['spec-cactusADM', 'spec-bzip2', 'spec-leslie3d', 'spec-hmmer', './tcc', 'spec-zeusmp'], ['spec-gcc', './tcc', 'spec-astar', 'spec-cactusADM', 'spec-h264ref', 'spec-leslie3d'], ['./tcc', 'spec-bzip2', 'spec-milc', 'spec-zeusmp', 'spec-omnetpp', 'spec-leslie3d'], ['spec-namd', 'spec-povray', 'spec-milc', 'spec-bwaves', 'spec-astar', './tcc'], ['./tcc', 'spec-astar', 'spec-milc', 'spec-omnetpp', 'spec-cactusADM', 'spec-gromacs'], ['spec-zeusmp', 'spec-hmmer', 'spec-gromacs', './tcc', 'spec-gobmk', 'spec-h264ref'], ['spec-lbm', 'spec-leslie3d', 'spec-bwaves', 'spec-gobmk', './tcc', 'spec-mcf'], ['spec-namd', 'spec-milc', './tcc', 'spec-omnetpp', 'spec-bwaves', 'spec-bzip2'], ['spec-cactusADM', 'spec-gcc', 'spec-astar', 'spec-omnetpp', 'spec-bwaves', './tcc']]
-    # eval_run_baseline(premaps)
-    # print("Finished baselines *************")
-    # pol1 = DVFS()
-    # eval_run_policy(policy=pol1, premaps=premaps)
-    # print("Finished sota *****************")
-    # pol2 = FixedCoreDenver()
-    # eval_run_policy(policy=pol2, premaps=premaps)
-    # print("Finished  Fixed *****************")
+    #premaps = [['spec-gromacs', 'spec-povray', 'spec-leslie3d', 'spec-h264ref', 'spec-omnetpp', './tcc'], ['spec-astar', 'spec-milc', './tcc', 'spec-cactusADM', 'spec-zeusmp', 'spec-h264ref'], ['spec-cactusADM', 'spec-zeusmp', 'spec-gcc', 'spec-mcf', './tcc', 'spec-lbm'], ['spec-hmmer', 'spec-povray', 'spec-zeusmp', 'spec-lbm', './tcc', 'spec-bwaves'], ['spec-sphinx3', 'spec-mcf', 'spec-namd', 'spec-bzip2', 'spec-cactusADM', './tcc'], ['spec-povray', 'spec-h264ref', 'spec-gobmk', './tcc', 'spec-lbm', 'spec-bzip2'], ['spec-mcf', 'spec-cactusADM', 'spec-zeusmp', 'spec-h264ref', 'spec-gromacs', './tcc'], ['./tcc', 'spec-bzip2', 'spec-gromacs', 'spec-lbm', 'spec-astar', 'spec-hmmer'], ['spec-sphinx3', 'spec-astar', './tcc', 'spec-cactusADM', 'spec-milc', 'spec-mcf'], ['spec-milc', 'spec-hmmer', 'spec-zeusmp', 'spec-omnetpp', 'spec-h264ref', './tcc'], ['spec-namd', 'spec-gobmk', 'spec-gromacs', 'spec-milc', 'spec-gcc', './tcc'], ['./tcc', 'spec-gobmk', 'spec-gcc', 'spec-lbm', 'spec-povray', 'spec-gromacs'], ['spec-lbm', 'spec-zeusmp', 'spec-gcc', 'spec-gromacs', 'spec-omnetpp', './tcc'], ['spec-lbm', './tcc', 'spec-gobmk', 'spec-gcc', 'spec-h264ref', 'spec-namd'], ['spec-cactusADM', './tcc', 'spec-milc', 'spec-namd', 'spec-povray', 'spec-sphinx3'], ['spec-hmmer', 'spec-h264ref', 'spec-lbm', './tcc', 'spec-povray', 'spec-leslie3d'], ['spec-omnetpp', 'spec-gcc', 'spec-hmmer', 'spec-cactusADM', './tcc', 'spec-sphinx3'], ['spec-lbm', 'spec-milc', 'spec-namd', 'spec-omnetpp', 'spec-bzip2', './tcc'], ['spec-bzip2', './tcc', 'spec-leslie3d', 'spec-sphinx3', 'spec-cactusADM', 'spec-omnetpp'], ['spec-gobmk', 'spec-mcf', 'spec-povray', 'spec-zeusmp', 'spec-bzip2', './tcc'], ['spec-mcf', 'spec-hmmer', 'spec-leslie3d', 'spec-bzip2', 'spec-lbm', './tcc'], ['spec-hmmer', './tcc', 'spec-povray', 'spec-gcc', 'spec-astar', 'spec-namd'], ['spec-astar', 'spec-gromacs', 'spec-h264ref', 'spec-povray', './tcc', 'spec-mcf'], ['spec-namd', 'spec-gobmk', './tcc', 'spec-astar', 'spec-gcc', 'spec-sphinx3'], ['spec-gromacs', 'spec-povray', 'spec-hmmer', 'spec-milc', 'spec-bwaves', './tcc'], ['spec-sphinx3', 'spec-lbm', 'spec-gromacs', 'spec-astar', 'spec-gcc', './tcc'], ['spec-cactusADM', 'spec-zeusmp', 'spec-gobmk', 'spec-milc', 'spec-omnetpp', './tcc'], ['spec-namd', './tcc', 'spec-milc', 'spec-mcf', 'spec-h264ref', 'spec-gromacs'], ['spec-bzip2', 'spec-cactusADM', 'spec-astar', 'spec-zeusmp', 'spec-gcc', './tcc'], ['spec-gromacs', './tcc', 'spec-cactusADM', 'spec-bzip2', 'spec-bwaves', 'spec-milc'], ['spec-h264ref', './tcc', 'spec-gcc', 'spec-lbm', 'spec-gromacs', 'spec-leslie3d'], ['spec-namd', 'spec-gobmk', 'spec-gromacs', 'spec-lbm', './tcc', 'spec-sphinx3'], ['spec-hmmer', './tcc', 'spec-leslie3d', 'spec-cactusADM', 'spec-astar', 'spec-omnetpp'], ['spec-h264ref', 'spec-astar', './tcc', 'spec-leslie3d', 'spec-mcf', 'spec-gobmk'], ['spec-cactusADM', 'spec-gobmk', 'spec-hmmer', 'spec-zeusmp', 'spec-povray', './tcc'], ['spec-mcf', 'spec-omnetpp', 'spec-gcc', './tcc', 'spec-milc', 'spec-hmmer'], ['spec-zeusmp', 'spec-leslie3d', 'spec-omnetpp', 'spec-h264ref', 'spec-mcf', './tcc'], ['./tcc', 'spec-sphinx3', 'spec-bzip2', 'spec-gromacs', 'spec-hmmer', 'spec-milc'], ['spec-leslie3d', 'spec-bzip2', 'spec-h264ref', 'spec-sphinx3', './tcc', 'spec-lbm'], ['spec-cactusADM', 'spec-lbm', 'spec-bwaves', 'spec-namd', './tcc', 'spec-leslie3d'], ['spec-zeusmp', 'spec-astar', 'spec-namd', 'spec-hmmer', './tcc', 'spec-omnetpp'], ['spec-h264ref', 'spec-bwaves', 'spec-gcc', 'spec-mcf', './tcc', 'spec-cactusADM'], ['spec-povray', 'spec-bwaves', 'spec-mcf', 'spec-zeusmp', 'spec-astar', './tcc'], ['spec-h264ref', 'spec-milc', 'spec-astar', 'spec-zeusmp', './tcc', 'spec-mcf'], ['spec-bwaves', 'spec-astar', 'spec-zeusmp', 'spec-milc', 'spec-lbm', './tcc'], ['./tcc', 'spec-namd', 'spec-astar', 'spec-leslie3d', 'spec-h264ref', 'spec-milc'], ['spec-sphinx3', 'spec-lbm', 'spec-milc', './tcc', 'spec-bwaves', 'spec-mcf'], ['spec-hmmer', 'spec-sphinx3', 'spec-mcf', 'spec-zeusmp', './tcc', 'spec-namd'], ['spec-sphinx3', 'spec-zeusmp', './tcc', 'spec-h264ref', 'spec-mcf', 'spec-omnetpp'], ['spec-omnetpp', 'spec-lbm', 'spec-cactusADM', 'spec-mcf', 'spec-bwaves', './tcc']]
+    eval_run_baseline(premaps)
+    print("Finished baselines *************")
+    pol1 = DVFS()
+    eval_run_policy(policy=pol1, premaps=premaps)
+    print("Finished sota *****************")
+    pol2 = FixedCoreDenver()
+    eval_run_policy(policy=pol2, premaps=premaps)
+    print("Finished  Fixed D *****************")
     pol3 = NeuralNet()
     eval_run_policy(policy=pol3, premaps=premaps)
-    # pol4 = FixedCoreARM()
-    # eval_run_policy(policy=pol4, premaps=premaps)
-    # print("Finished  Fixed *****************")
-    #pol5 = LPCMPCore()
-    #eval_run_policy(policy=pol5, premaps=premaps)
+    print("Finished  NN *****************")
+    pol4 = FixedCoreARM()
+    eval_run_policy(policy=pol4, premaps=premaps)
+    print("Finished  Fixed  A *****************")
+    pol5 = LPCMPCore()
+    eval_run_policy(policy=pol5, premaps=premaps)
     pol6 = XGBoost()
     eval_run_policy(policy=pol6, premaps=premaps)
     pol7 = RandomForest()
